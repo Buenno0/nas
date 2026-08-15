@@ -47,9 +47,7 @@ export function Login() {
         <div className="mb-6 flex items-center gap-3">
           <Mark size={42} />
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">
-              NAS <span className="text-muted">Ozymandias</span>
-            </h1>
+            <h1 className="text-lg font-semibold tracking-tight">Ozymandias</h1>
             <p className="text-xs text-muted">Seu acervo, na sua rede</p>
           </div>
         </div>

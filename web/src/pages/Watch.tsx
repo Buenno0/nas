@@ -20,6 +20,21 @@ const SKIP_SECONDS = 10
 const HIDE_AFTER_MS = 3000
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
 
+type SafariVideoElement = HTMLVideoElement & {
+  webkitDisplayingFullscreen?: boolean
+  webkitEnterFullscreen?: () => void
+  webkitExitFullscreen?: () => void
+}
+
+type LockableScreenOrientation = ScreenOrientation & {
+  lock?: (orientation: 'landscape') => Promise<void>
+  unlock?: () => void
+}
+
+function screenOrientation() {
+  return window.screen.orientation as LockableScreenOrientation | undefined
+}
+
 export function Watch() {
   const { fileId } = useParams()
   const id = Number(fileId)
@@ -108,9 +123,46 @@ export function Watch() {
 
   const toggleFullscreen = useCallback(() => {
     const shell = shellRef.current
-    if (!shell) return
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void shell.requestFullscreen().catch(() => {})
+    const video = videoRef.current as SafariVideoElement | null
+    if (!shell || !video) return
+
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().finally(() => screenOrientation()?.unlock?.())
+      return
+    }
+
+    if (video.webkitDisplayingFullscreen) {
+      video.webkitExitFullscreen?.()
+      return
+    }
+
+    const enterNativeVideoFullscreen = () => {
+      try {
+        video.webkitEnterFullscreen?.()
+      } catch {
+        // O Safari só permite fullscreen durante uma ação direta do usuário.
+      }
+    }
+
+    // iPhones que não implementam fullscreen em elementos comuns precisam da
+    // API nativa do próprio <video>. Ela também acompanha a rotação do aparelho.
+    if (!document.fullscreenEnabled || typeof shell.requestFullscreen !== 'function') {
+      enterNativeVideoFullscreen()
+      return
+    }
+
+    void shell
+      .requestFullscreen()
+      .then(() => screenOrientation()?.lock?.('landscape').catch(() => {}))
+      .catch(enterNativeVideoFullscreen)
+  }, [])
+
+  useEffect(() => {
+    const releaseOrientation = () => {
+      if (!document.fullscreenElement) screenOrientation()?.unlock?.()
+    }
+    document.addEventListener('fullscreenchange', releaseOrientation)
+    return () => document.removeEventListener('fullscreenchange', releaseOrientation)
   }, [])
 
   // Atalhos de teclado no estilo dos players de streaming.
@@ -384,7 +436,8 @@ export function Watch() {
             <button
               type="button"
               onClick={toggleFullscreen}
-              aria-label="Tela cheia"
+              aria-label="Tela cheia em paisagem"
+              title="Tela cheia em paisagem"
               className="grid h-9 w-9 place-items-center rounded-full transition hover:bg-white/10"
             >
               <FullscreenIcon />

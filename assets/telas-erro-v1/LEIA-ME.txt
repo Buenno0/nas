@@ -1,9 +1,0 @@
-Telas de erro — Ozymandias NAS
-================================
-401.html / 404.html / 500.html — páginas independentes, um arquivo cada.
-Trocam sozinhas entre tema escuro e claro (areia) conforme o sistema do visitante
-(prefers-color-scheme). Sem JS, sem dependências além da fonte do Google Fonts
-(cai para a fonte do sistema se estiver offline).
-
-Ajuste os links dos botões (/login, /, /buscar, /logs) para as rotas do seu NAS.
-ozymandias-favicon.svg acompanha as páginas — mantenha no mesmo diretório.

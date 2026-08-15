@@ -6,6 +6,7 @@ import { useTheme } from '../lib/theme'
 import { MiniPlayer } from './MiniPlayer'
 import { Mark } from './Mark'
 import {
+  ChevronRight,
   FilmIcon,
   HomeIcon,
   LogoutIcon,
@@ -56,13 +57,11 @@ export function Layout({ children }: { children: ReactNode }) {
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <Link to="/" className="flex items-center gap-2.5 px-3 py-1" aria-label="NAS Ozymandias">
+    <Link to="/" className="flex items-center gap-2.5 px-3 py-1" aria-label="Ozymandias">
       <Mark size={30} />
       {/* No celular a barra é disputada com a busca: fica só a marca. */}
       {!compact && (
-        <span className="text-[15px] leading-tight font-semibold tracking-tight">
-          NAS <span className="text-muted">Ozymandias</span>
-        </span>
+        <span className="text-[15px] leading-tight font-semibold tracking-tight">Ozymandias</span>
       )}
     </Link>
   )
@@ -99,18 +98,84 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
             </NavLink>
           )
         })}
+
+        {/* As ruínas ficam junto do acervo, logo abaixo das bibliotecas. */}
+        <RuinasMenu />
       </div>
 
       <div className="flex flex-col gap-1">
         <NavLink to="/settings" className={navClass}>
           <SettingsIcon /> {admin ? 'Configurações' : 'Minha conta'}
         </NavLink>
-        {/* Atalho para as três telas de erro intencionais. */}
-        <NavLink to="/ruinas" className={navClass}>
-          <WarningIcon /> Ruínas
-        </NavLink>
       </div>
     </aside>
+  )
+}
+
+function RuinasMenu() {
+  const [open, setOpen] = useState(() => window.location.pathname === '/ruinas')
+
+  return (
+    // Os links são <a> comuns porque cada destino precisa sair do SPA e
+    // receber do servidor seu status HTTP real.
+    <div
+      className={[
+        'mt-1 overflow-hidden rounded-xl border transition',
+        open ? 'border-line bg-elev/55' : 'border-transparent',
+      ].join(' ')}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-controls="menu-ruinas-sidebar"
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-muted transition hover:bg-elev/60 hover:text-ink"
+      >
+        <WarningIcon className="shrink-0 text-amber-400" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-ink">Ruínas</span>
+          <span className="block truncate text-[10px] font-semibold tracking-wide text-accent uppercase">
+            Escolha como tudo termina
+          </span>
+        </span>
+        <ChevronRight
+          className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+
+      <div
+        id="menu-ruinas-sidebar"
+        className={`grid transition-all duration-200 ${
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+        }`}
+      >
+        <nav className="min-h-0 overflow-hidden" aria-label="Telas de erro">
+          <div className="mx-3 mb-3 ml-6 border-l border-line pl-3">
+            <a
+              href="/ruinas/401"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
+            >
+              <span className="font-mono font-semibold text-violet-400">401</span>
+              <span>Entrada proibida</span>
+            </a>
+            <a
+              href="/ruinas/404"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
+            >
+              <span className="font-mono font-semibold text-amber-400">404</span>
+              <span>Caminho perdido</span>
+            </a>
+            <a
+              href="/ruinas/500"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
+            >
+              <span className="font-mono font-semibold text-rose-400">500</span>
+              <span>Colapso final</span>
+            </a>
+          </div>
+        </nav>
+      </div>
+    </div>
   )
 }
 
@@ -177,7 +242,7 @@ function MobileNav({ libraries }: { libraries: Library[] }) {
   const first = libraries[0]
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
-      <div className="grid grid-cols-4">
+      <div className="grid grid-cols-5">
         <MobileLink to="/" label="Início" icon={<HomeIcon />} />
         <MobileLink to="/search" label="Buscar" icon={<SearchIcon />} />
         <MobileLink
@@ -185,6 +250,7 @@ function MobileNav({ libraries }: { libraries: Library[] }) {
           label={first ? 'Acervo' : 'Config'}
           icon={first ? <FilmIcon /> : <SettingsIcon />}
         />
+        <MobileLink to="/ruinas" label="Ruínas" icon={<WarningIcon />} />
         <MobileLink to="/settings" label="Ajustes" icon={<SettingsIcon />} />
       </div>
     </nav>

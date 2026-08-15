@@ -106,10 +106,10 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string) err
 		fmt.Printf("  └──────────────────────────────────────────────\n")
 	}
 
-	fmt.Printf("\n  NAS Ozymandias %s — modo %s\n", Version, m)
+	fmt.Printf("\n  Ozymandias %s — modo %s\n", Version, m)
 	if m == modeLocal {
 		fmt.Printf("  http://localhost:%d\n", cfg.Port)
-		fmt.Printf("  http://%s:%d  (rede local)\n", LANIP(), cfg.Port)
+		announceShareURL("endereço na rede local", fmt.Sprintf("http://%s:%d", LANIP(), cfg.Port))
 	} else {
 		fmt.Printf("  http://127.0.0.1:%d  (só nesta máquina)\n", cfg.Port)
 		go runTunnel(ctx, cfg.Port, tunnelName, l)
@@ -130,10 +130,11 @@ func runTunnel(ctx context.Context, port int, name string, l *lock.Lock) {
 				fmt.Printf("  tunnel nomeado %q no ar — use o domínio configurado na Cloudflare\n", name)
 				return
 			}
-			fmt.Printf("\n  ✦ %s\n    URL pública ativa. Ela muda a cada execução do quick tunnel.\n\n", url)
 			if err := l.SetURL(url); err != nil {
 				fmt.Fprintln(os.Stderr, "aviso: não consegui registrar a URL no lock:", err)
 			}
+			announceShareURL("URL pública ativa; ela muda a cada quick tunnel", url)
+			fmt.Println()
 		},
 		OnState: func(state string) {
 			fmt.Printf("  tunnel: %s\n", state)
@@ -168,7 +169,7 @@ func cmdStop() error {
 }
 
 func runMenu(ctx context.Context) int {
-	fmt.Printf("\n  NAS Ozymandias %s\n\n", Version)
+	fmt.Printf("\n  Ozymandias %s\n\n", Version)
 
 	if info, running, err := lock.Current(); err == nil && running {
 		fmt.Printf("  Já existe uma instância no ar (modo %s, pid %d).\n", info.Mode, info.PID)

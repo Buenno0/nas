@@ -3,8 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>500 — Ozymandias NAS</title>
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0d0f14">
+<title>500 — Ozymandias</title>
 <link rel="icon" href="/telas-erro/ozymandias-favicon.svg">
+<script>
+  /* Mantém a tela de erro no mesmo tema escolhido no NAS. Sem escolha
+     salva, acompanha a preferência clara/escura do aparelho. */
+  (function () {
+    try {
+      var saved = localStorage.getItem('nas-theme');
+      var systemLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      var theme = saved === 'light' || (saved !== 'dark' && systemLight) ? 'light' : 'dark';
+      document.documentElement.classList.add(theme);
+      document.documentElement.style.colorScheme = theme;
+      document.querySelector('meta[name="theme-color"]').content = theme === 'light' ? '#efe0c8' : '#0d0f14';
+    } catch (e) {}
+  })();
+</script>
 <style>
   /* Fontes servidas pelo próprio NAS: as telas de erro funcionam offline e
      nenhuma requisição sai para terceiros. */
@@ -28,10 +44,22 @@
     --dune-0: #15182190; --dune-1: #191d29; --dune-2: #1e2331; --dune-3: #232939;
     --mote: #6b7390; --mote-op: 0.5;
     --violet: #8b7cff; --amber: #e0824a;
-    --btn-bg: #f2f3f7; --btn-fg: #0d0f14;
+    --mark-body: #8b7cff; --mark-headdress: #0d0f14; --mark-headdress-opacity: 0.35;
+    --mark-eyes: #0d0f14; --mark-play: #0d0f14;
+  }
+  :root.light {
+    --bg: #efe0c8; --bg-2: #f7ecd9; --line: #ddcaa8; --line-2: #c2a879;
+    --text: #2b2118; --muted: #6b5540; --faint: #8a6a44;
+    --numeral: #e2cfab;
+    --stone: #2b2118; --stone-2: #c98f3c; --cut: #efe0c8;
+    --dune-0: #e0c9a4; --dune-1: #d8bd95; --dune-2: #cfb086; --dune-3: #c6a377;
+    --mote: #ffffff; --mote-op: 0.55;
+    --violet: #a8642c; --amber: #9c3f1d;
+    --mark-body: #2b2118; --mark-headdress: #c98f3c; --mark-headdress-opacity: 1;
+    --mark-eyes: #efe0c8; --mark-play: #a8642c;
   }
   @media (prefers-color-scheme: light) {
-    :root {
+    :root:not(.dark) {
       --bg: #efe0c8; --bg-2: #f7ecd9; --line: #ddcaa8; --line-2: #c2a879;
       --text: #2b2118; --muted: #6b5540; --faint: #8a6a44;
       --numeral: #e2cfab;
@@ -39,7 +67,8 @@
       --dune-0: #e0c9a4; --dune-1: #d8bd95; --dune-2: #cfb086; --dune-3: #c6a377;
       --mote: #ffffff; --mote-op: 0.55;
       --violet: #a8642c; --amber: #9c3f1d;
-      --btn-bg: #2b2118; --btn-fg: #efe0c8;
+      --mark-body: #2b2118; --mark-headdress: #c98f3c; --mark-headdress-opacity: 1;
+      --mark-eyes: #efe0c8; --mark-play: #a8642c;
     }
   }
   * { box-sizing: border-box; }
@@ -55,7 +84,7 @@
     position: relative; z-index: 3; display: flex; align-items: center; gap: 10px;
     padding: 14px 22px; border-bottom: 1px solid var(--line); background: var(--bg-2);
   }
-  .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(150deg, #8b7cff, #4b7bec); display: flex; align-items: center; justify-content: center; }
+  .logo { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
   .brand { font-size: 14px; font-weight: 600; }
   .path { margin-left: auto; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.12em; color: var(--faint); }
   main {
@@ -73,11 +102,18 @@
   .quote { margin: 0; padding-left: 16px; border-left: 2px solid var(--line-2); font-style: italic; font-size: 15px; line-height: 1.75; color: var(--muted); text-wrap: pretty; }
   .quote cite { display: block; font-style: normal; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.12em; color: var(--faint); }
   .lead { margin: 0; font-size: 15px; line-height: 1.7; color: var(--muted); max-width: 420px; text-wrap: pretty; }
-  .actions { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 4px; }
-  .btn { display: inline-flex; align-items: center; gap: 9px; padding: 13px 22px; border-radius: 10px; font-size: 14px; font-weight: 600; transition: transform .18s ease, opacity .18s ease; }
-  .btn:hover { transform: translateY(-2px); }
-  .btn-primary { background: var(--amber); color: #1d1108; }
-  .btn-ghost { border: 1px solid var(--line-2); color: var(--muted); font-weight: 500; }
+  .back {
+    position: fixed; z-index: 5;
+    left: max(18px, env(safe-area-inset-left));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    display: inline-flex; align-items: center; padding: 9px 13px;
+    border: 1px solid var(--line-2); border-radius: 999px;
+    background: color-mix(in srgb, var(--bg-2) 82%, transparent);
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    transition: color .18s ease, border-color .18s ease, transform .18s ease;
+  }
+  .back:hover { color: var(--text); border-color: var(--muted); transform: translateX(-2px); }
 
   /* --- entrada --- */
   .copy > * { animation: rise .7s cubic-bezier(.2,.7,.2,1) backwards; }
@@ -125,8 +161,7 @@
     main { align-items: flex-start; justify-content: flex-start; padding: 48px 24px 140px; }
     .numeral { align-items: flex-start; padding-top: 26vh; }
     .numeral span { font-size: 46vw; }
-    .actions { position: fixed; left: 24px; right: 24px; bottom: 28px; flex-direction: column; gap: 10px; z-index: 3; }
-    .btn { justify-content: center; padding: 15px; }
+    .back { left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -137,13 +172,15 @@
 <body>
   <header class="topbar">
     <div class="logo">
-      <svg width="18" height="18" viewBox="0 0 96 96" fill="none" aria-hidden="true">
-        <path d="M18 22 C18 14 27 9 48 9 C69 9 78 14 78 22 L78 52 C78 68 66 80 48 87 C30 80 18 68 18 52 Z" fill="#ffffff"/>
-        <circle cx="37" cy="53" r="8" fill="#4b41b8"/><circle cx="59" cy="53" r="8" fill="#4b41b8"/>
-        <path d="M41 66 L41 78 L55 72 Z" fill="#4b41b8"/>
+      <svg width="30" height="30" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+        <path d="M18 22 C18 14 27 9 48 9 C69 9 78 14 78 22 L78 52 C78 68 66 80 48 87 C30 80 18 68 18 52 Z" fill="var(--mark-body)"/>
+        <path d="M24 24 C24 18 32 14 48 14 C64 14 72 18 72 24 L72 34 L24 34 Z" fill="var(--mark-headdress)" opacity="var(--mark-headdress-opacity)"/>
+        <rect x="24" y="36" width="48" height="4" fill="var(--mark-headdress)" opacity="var(--mark-headdress-opacity)"/>
+        <circle cx="37" cy="53" r="8" fill="var(--mark-eyes)"/><circle cx="59" cy="53" r="8" fill="var(--mark-eyes)"/>
+        <path d="M41 66 L41 78 L55 72 Z" fill="var(--mark-play)"/>
       </svg>
     </div>
-    <span class="brand">NAS Ozymandias</span>
+    <span class="brand">Ozymandias</span>
     <span class="path">erro 500</span>
   </header>
   <main>
@@ -188,12 +225,9 @@
       <h1>A obra ruiu</h1>
       
       <p class="lead">Falha interna do servidor. Já estamos escavando os escombros.</p>
-      <div class="actions">
-        <a class="btn btn-primary" href=".">Tentar de novo</a>
-        <a class="btn btn-ghost" href="/settings">Configurações</a>
-      </div>
     </div>
   </main>
+  <a class="back" href="/ruinas" aria-label="Voltar para as ruínas">← Voltar</a>
   <script>
     (function () {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;

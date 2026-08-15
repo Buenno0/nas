@@ -41,7 +41,7 @@ export function Mark({ size = 32, className }: MarkProps) {
       fill="none"
       className={className}
       role="img"
-      aria-label="NAS Ozymandias"
+      aria-label="Ozymandias"
     >
       <path
         d="M18 22 C18 14 27 9 48 9 C69 9 78 14 78 22 L78 52 C78 68 66 80 48 87 C30 80 18 68 18 52 Z"

@@ -1,4 +1,4 @@
-Telas de erro animadas — Ozymandias NAS
+Telas de erro animadas — Ozymandias
 =======================================
 401.html / 404.html / 500.html — páginas independentes, um arquivo cada.
 
@@ -8,6 +8,7 @@ o numeral respira e reage ao mouse (parallax leve). No 500 a rachadura
 se desenha e a máscara dá um tremor discreto a cada 7s.
 Tudo desliga sozinho com "prefers-reduced-motion: reduce".
 
-Tema escuro/claro automático (prefers-color-scheme). Só CSS + 20 linhas de JS
-para o parallax. Ajuste os links dos botões (/login, /, /buscar, /logs).
+Tema escuro/claro acompanha primeiro a escolha salva no NAS (nas-theme) e,
+quando ela não existe, usa prefers-color-scheme do aparelho. O JS também cuida
+do parallax. Ajuste os links dos botões (/login, /, /buscar, /logs).
 ozymandias-favicon.svg acompanha — mantenha no mesmo diretório.

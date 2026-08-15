@@ -15,7 +15,7 @@ import (
 // Version é sobrescrito no build via -ldflags.
 var Version = "dev"
 
-const usage = `NAS Ozymandias — servidor de mídia pessoal
+const usage = `Ozymandias — servidor de mídia pessoal
 
 Uso:
   nas                      menu interativo (1 = local, 2 = tunnel)

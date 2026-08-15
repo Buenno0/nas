@@ -1,4 +1,4 @@
-# NAS Ozymandias
+# Ozymandias
 
 Servidor de mídia pessoal: um binário Go com o frontend React embutido dentro
 dele. Roda de qualquer pasta, indexa as suas pastas de filmes, séries, músicas
@@ -40,7 +40,7 @@ nas
 Sem argumentos, abre o menu:
 
 ```
-  NAS Ozymandias
+  Ozymandias
 
   1) Local    → acessível na sua rede
   2) Tunnel   → acessível pela internet (Cloudflare)
@@ -49,6 +49,11 @@ Sem argumentos, abre o menu:
 
 No primeiro boot, o NAS cria o seu usuário e mostra uma senha aleatória no
 terminal. Anote: ela não aparece de novo.
+
+Ao iniciar, o endereço compartilhável é copiado automaticamente para a área
+de transferência e aparece também como QR Code no terminal. No modo local, o QR
+aponta para o IP da rede; no quick tunnel, ele é atualizado assim que o domínio
+`*.trycloudflare.com` fica disponível.
 
 ### Comandos
 
@@ -99,7 +104,8 @@ TMDB e deixa você escolher o item certo.
 
 O modo tunnel usa o `cloudflared`. Sem configuração nenhuma, ele abre um
 *quick tunnel* e imprime uma URL `*.trycloudflare.com` — que muda a cada
-execução. Para uma URL fixa no seu domínio:
+execução. A URL é copiada automaticamente e o terminal mostra um QR Code
+pronto para leitura pelo celular. Para uma URL fixa no seu domínio:
 
 ```bash
 cloudflared login
@@ -162,9 +168,10 @@ web/                React + TypeScript + Tailwind
 ## As ruínas (telas de erro)
 
 As páginas de 401, 404 e 500 ficam em `web/public/telas-erro/` — HTML puro, um
-arquivo cada, com tema claro e escuro por `prefers-color-scheme` e animação de
-entrada (a estátua assenta na areia, a poeira sobe, o numeral respira). Tudo
-desliga sozinho com `prefers-reduced-motion: reduce`.
+arquivo cada, com tema claro e escuro que acompanha a escolha salva no NAS e
+usa `prefers-color-scheme` como fallback. A animação de entrada faz a estátua
+assentar na areia, a poeira subir e o numeral respirar. Tudo desliga sozinho
+com `prefers-reduced-motion: reduce`.
 
 As fontes (Archivo e JetBrains Mono) são servidas pelo próprio NAS, em
 `web/public/fonts/` — as telas funcionam offline e nenhuma requisição sai para
