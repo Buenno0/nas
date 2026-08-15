@@ -1,0 +1,13 @@
+Telas de erro animadas — Ozymandias NAS
+=======================================
+401.html / 404.html / 500.html — páginas independentes, um arquivo cada.
+
+Animação: a estátua assenta na areia na entrada, o texto sobe em cascata,
+poeira sobe pelas dunas, as camadas de areia deslizam devagar em loop,
+o numeral respira e reage ao mouse (parallax leve). No 500 a rachadura
+se desenha e a máscara dá um tremor discreto a cada 7s.
+Tudo desliga sozinho com "prefers-reduced-motion: reduce".
+
+Tema escuro/claro automático (prefers-color-scheme). Só CSS + 20 linhas de JS
+para o parallax. Ajuste os links dos botões (/login, /, /buscar, /logs).
+ozymandias-favicon.svg acompanha — mantenha no mesmo diretório.

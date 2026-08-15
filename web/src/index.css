@@ -1,0 +1,83 @@
+@import 'tailwindcss';
+
+/* O tema é trocado por classe no <html>, não por prefers-color-scheme:
+   escuro é o padrão do produto e a escolha da pessoa vence o sistema. */
+@custom-variant light (&:where(.light, .light *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-elev: var(--elev);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+
+  --font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+}
+
+:root,
+.dark {
+  --bg: #0a0b0e;
+  --surface: #141720;
+  --elev: #1c2029;
+  --line: #262b37;
+  --ink: #eef1f7;
+  --muted: #98a2b8;
+  --accent: #7c6cff;
+  --accent-ink: #ffffff;
+}
+
+.light {
+  --bg: #f6f7fa;
+  --surface: #ffffff;
+  --elev: #eef1f6;
+  --line: #e0e5ee;
+  --ink: #12141c;
+  --muted: #566072;
+  --accent: #5b45f5;
+  --accent-ink: #ffffff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Prateleiras horizontais: rolam sem barra visível. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 40%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

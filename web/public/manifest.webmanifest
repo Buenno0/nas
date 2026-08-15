@@ -1,0 +1,13 @@
+{
+  "name": "NAS Ozymandias",
+  "short_name": "Ozymandias",
+  "description": "Seu acervo de filmes, séries, músicas e fotos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0b0e",
+  "theme_color": "#0a0b0e",
+  "icons": [
+    { "src": "/icons/appicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/appicon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

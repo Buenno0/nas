@@ -1,0 +1,201 @@
+package api
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"nas/internal/config"
+	"nas/internal/db"
+	"nas/internal/media"
+)
+
+// Tipos MIME que o Go não conhece ou erra, e que o <video> precisa acertar.
+var mimeByExt = map[string]string{
+	".mkv":  "video/x-matroska",
+	".m4v":  "video/mp4",
+	".mov":  "video/quicktime",
+	".avi":  "video/x-msvideo",
+	".ts":   "video/mp2t",
+	".m2ts": "video/mp2t",
+	".webm": "video/webm",
+	".mp4":  "video/mp4",
+	".mp3":  "audio/mpeg",
+	".m4a":  "audio/mp4",
+	".flac": "audio/flac",
+	".ogg":  "audio/ogg",
+	".opus": "audio/ogg",
+	".wav":  "audio/wav",
+	".aac":  "audio/aac",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
+	".gif":  "image/gif",
+	".heic": "image/heic",
+	".avif": "image/avif",
+}
+
+// handleStream entrega o arquivo cru. http.ServeContent cuida de Range, seek,
+// If-Modified-Since e 206 — não há paginação manual de bytes aqui.
+func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
+	file, err := s.db.FileByID(r.Context(), atoi64(r.PathValue("id")))
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	f, err := os.Open(file.Path)
+	if err != nil {
+		// O índice pode estar à frente do disco (arquivo movido, HD externo fora).
+		writeError(w, http.StatusNotFound, "arquivo indisponível no disco")
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "não foi possível ler o arquivo")
+		return
+	}
+
+	if ct, ok := mimeByExt[strings.ToLower(file.Ext)]; ok {
+		w.Header().Set("Content-Type", ct)
+	}
+	if r.URL.Query().Get("download") != "" {
+		w.Header().Set("Content-Disposition",
+			fmt.Sprintf("attachment; filename*=UTF-8''%s", escapeFilename(filepath.Base(file.Path))))
+	}
+	// O conteúdo é privado e o cache do navegador é por sessão.
+	w.Header().Set("Cache-Control", "private, max-age=0")
+
+	http.ServeContent(w, r, filepath.Base(file.Path), info.ModTime(), f)
+}
+
+// Larguras permitidas para as miniaturas. Uma lista fechada evita que alguém
+// peça mil tamanhos diferentes e encha o disco de JPEG.
+var thumbWidths = map[int]bool{320: true, 800: true, 1600: true}
+
+// handleFileThumb gera (e cacheia) a miniatura de uma foto ou de um vídeo.
+// É o que faz a galeria carregar rápido e o que resolve HEIC, formato que o
+// Chrome não abre — a conversão para JPEG acontece aqui.
+func (s *Server) handleFileThumb(w http.ResponseWriter, r *http.Request) {
+	file, err := s.db.FileByID(r.Context(), atoi64(r.PathValue("id")))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	width := atoiDefault(r.URL.Query().Get("w"), 320)
+	if !thumbWidths[width] {
+		width = 320
+	}
+
+	dir, err := config.ThumbDir()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var name string
+	switch file.Type {
+	case db.TypePhoto:
+		name, err = media.ImageThumb(r.Context(), file.Path, file.MTime, dir, width)
+	case db.TypeVideo:
+		name, err = media.VideoFrame(r.Context(), file.Path, file.MTime, file.Duration, dir)
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		if errors.Is(err, media.ErrNoFFmpeg) {
+			writeError(w, http.StatusServiceUnavailable, "ffmpeg não instalado: sem miniaturas")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "não foi possível gerar a miniatura")
+		return
+	}
+
+	f, err := os.Open(filepath.Join(dir, name))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "private, max-age=604800, immutable")
+	http.ServeContent(w, r, name, info.ModTime(), f)
+}
+
+// handleImage serve pôsteres e thumbnails do cache em ~/.nas/cache.
+func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
+	kind := r.PathValue("kind")
+	name := r.PathValue("name")
+
+	// O nome vem do banco, mas a URL vem do cliente: nada de subir diretório.
+	if name == "" || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+		http.NotFound(w, r)
+		return
+	}
+
+	var dir string
+	var err error
+	switch kind {
+	case "posters":
+		dir, err = config.PosterDir()
+	case "thumbs":
+		dir, err = config.ThumbDir()
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	path := filepath.Join(dir, name)
+	f, err := os.Open(path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Imagens de cache são imutáveis: o nome muda quando o conteúdo muda.
+	w.Header().Set("Cache-Control", "private, max-age=604800, immutable")
+	http.ServeContent(w, r, name, info.ModTime(), f)
+}
+
+// escapeFilename deixa o nome seguro para o cabeçalho Content-Disposition.
+func escapeFilename(name string) string {
+	var b strings.Builder
+	for _, c := range []byte(name) {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+			c == '.' || c == '-' || c == '_' {
+			b.WriteByte(c)
+			continue
+		}
+		fmt.Fprintf(&b, "%%%02X", c)
+	}
+	return b.String()
+}
