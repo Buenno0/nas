@@ -19,8 +19,11 @@ import (
 const (
 	// CookieName é o nome do cookie de sessão.
 	CookieName = "nas_session"
-	// SessionTTL é quanto tempo um login dura.
+	// SessionTTL é quanto tempo dura um login com "manter conectado".
 	SessionTTL = 30 * 24 * time.Hour
+	// ShortSessionTTL é o login de uma sentada: sem "manter conectado", a
+	// sessão morre no fim do dia e o cookie some quando o navegador fecha.
+	ShortSessionTTL = 12 * time.Hour
 )
 
 var (
@@ -88,10 +91,12 @@ func (s *Service) CreateUser(ctx context.Context, username, password string, isA
 }
 
 // Login valida as credenciais e devolve o token de sessão em claro — é a única
-// vez que ele existe fora do navegador.
-func (s *Service) Login(ctx context.Context, clientIP, username, password, userAgent string) (token string, u db.User, err error) {
+// vez que ele existe fora do navegador. remember escolhe entre a sessão longa
+// e a de uma sentada; o chamador usa o TTL devolvido para decidir se o cookie
+// expira em data marcada ou quando o navegador fecha.
+func (s *Service) Login(ctx context.Context, clientIP, username, password, userAgent string, remember bool) (token string, u db.User, ttl time.Duration, err error) {
 	if wait, blocked := s.limiter.Blocked(clientIP); blocked {
-		return "", db.User{}, fmt.Errorf("muitas tentativas: tente de novo em %s", wait.Round(time.Second))
+		return "", db.User{}, 0, fmt.Errorf("muitas tentativas: tente de novo em %s", wait.Round(time.Second))
 	}
 
 	u, err = s.db.UserByName(ctx, strings.TrimSpace(username))
@@ -101,26 +106,31 @@ func (s *Service) Login(ctx context.Context, clientIP, username, password, userA
 			// tempo de resposta, se o usuário existe.
 			_, _ = HashPassword(password)
 			s.limiter.Fail(clientIP)
-			return "", db.User{}, ErrInvalidCredentials
+			return "", db.User{}, 0, ErrInvalidCredentials
 		}
-		return "", db.User{}, err
+		return "", db.User{}, 0, err
 	}
 
 	ok, err := VerifyPassword(u.PasswordHash, password)
 	if err != nil || !ok {
 		s.limiter.Fail(clientIP)
-		return "", db.User{}, ErrInvalidCredentials
+		return "", db.User{}, 0, ErrInvalidCredentials
 	}
 	s.limiter.Reset(clientIP)
 
 	token, err = newToken()
 	if err != nil {
-		return "", db.User{}, err
+		return "", db.User{}, 0, err
 	}
-	if err := s.db.CreateSession(ctx, hashToken(token), u.ID, userAgent, time.Now().Add(SessionTTL)); err != nil {
-		return "", db.User{}, err
+
+	ttl = ShortSessionTTL
+	if remember {
+		ttl = SessionTTL
 	}
-	return token, u, nil
+	if err := s.db.CreateSession(ctx, hashToken(token), u.ID, userAgent, time.Now().Add(ttl)); err != nil {
+		return "", db.User{}, 0, err
+	}
+	return token, u, ttl, nil
 }
 
 // UserFromToken resolve o cookie de sessão.

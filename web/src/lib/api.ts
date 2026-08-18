@@ -201,10 +201,10 @@ function query(params: TitleQuery): string {
 
 export const api = {
   me: () => request<User>('/api/auth/me'),
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, remember = true) =>
     request<User>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, remember }),
     }),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   changePassword: (current: string, next: string) =>

@@ -77,6 +77,58 @@ func userAdd(ctx context.Context, args []string) error {
 	return nil
 }
 
+// cmdPasswd redefine a senha de alguém sem pedir a antiga: é a recuperação de
+// senha do NAS, e quem tem acesso ao terminal do servidor já pode tudo.
+// Todas as sessões daquele usuário caem junto.
+func cmdPasswd(ctx context.Context, args []string) error {
+	if len(args) != 1 {
+		return errors.New("uso: nas passwd <usuário>")
+	}
+	username := strings.TrimSpace(args[0])
+
+	database, err := db.Open()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+
+	user, err := database.UserByName(ctx, username)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return fmt.Errorf("usuário %q não existe (veja `nas user ls`)", username)
+		}
+		return err
+	}
+
+	senha, err := promptPassword("nova senha: ")
+	if err != nil {
+		return err
+	}
+	confirma, err := promptPassword("confirme: ")
+	if err != nil {
+		return err
+	}
+	if senha != confirma {
+		return errors.New("as senhas não conferem")
+	}
+	if len(senha) < 8 {
+		return errors.New("a senha precisa de pelo menos 8 caracteres")
+	}
+
+	hash, err := auth.HashPassword(senha)
+	if err != nil {
+		return err
+	}
+	if err := database.SetPassword(ctx, user.ID, hash); err != nil {
+		return err
+	}
+	if err := database.DeleteUserSessions(ctx, user.ID); err != nil {
+		return err
+	}
+	fmt.Printf("senha de %q redefinida; as sessões dessa conta foram encerradas\n", username)
+	return nil
+}
+
 func userList(ctx context.Context) error {
 	database, err := db.Open()
 	if err != nil {

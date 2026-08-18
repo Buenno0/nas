@@ -218,7 +218,7 @@ function TopBar() {
 
         <button
           type="button"
-          onClick={toggle}
+          onClick={(e) => toggle(e)}
           aria-label={theme === 'dark' ? 'Mudar para o tema claro' : 'Mudar para o tema escuro'}
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-surface text-muted transition hover:text-ink"
         >

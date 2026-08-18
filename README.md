@@ -70,6 +70,7 @@ aponta para o IP da rede; no quick tunnel, ele é atualizado assim que o domíni
 | `nas user ls` | lista contas e papéis |
 | `nas user rm <nome>` | remove uma conta |
 | `nas user promote\|demote <nome>` | muda o papel |
+| `nas passwd <nome>` | redefine a senha de alguém (recuperação de acesso) |
 | `nas config [set <chave> <valor>]` | mostra ou altera a configuração |
 | `nas status` / `nas stop` | estado da instância / encerra |
 

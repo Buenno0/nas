@@ -1,6 +1,25 @@
 package cli
 
-import "net"
+import (
+	"net"
+	"os"
+	"strings"
+)
+
+// MDNSName devolve o nome da máquina na rede local (Bonjour/mDNS), do tipo
+// "macbook-air-de-mateus.local". Vale mais que o IP: não muda quando o
+// roteador dá outro endereço. Vazio quando o sistema não expõe um nome .local.
+func MDNSName() string {
+	host, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	host = strings.TrimSuffix(host, ".")
+	if !strings.HasSuffix(strings.ToLower(host), ".local") {
+		return ""
+	}
+	return host
+}
 
 // LANIP tenta descobrir o IP da máquina na rede local, para imprimir uma URL
 // que outros dispositivos consigam abrir. Não abre conexão de fato — um socket

@@ -185,7 +185,7 @@ function AppearanceCard() {
     <Card title="Aparência" description="O tema escuro é o padrão; sua escolha fica salva neste navegador.">
       <button
         type="button"
-        onClick={toggle}
+        onClick={(e) => toggle(e)}
         className="inline-flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium transition hover:bg-elev"
       >
         {theme === 'dark' ? <SunIcon /> : <MoonIcon />}

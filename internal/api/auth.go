@@ -12,6 +12,9 @@ import (
 type loginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Remember vem do "manter conectado": sessão de 30 dias com cookie
+	// datado, contra 12 horas com cookie que morre ao fechar o navegador.
+	Remember bool `json:"remember"`
 }
 
 type userResponse struct {
@@ -28,7 +31,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := auth.ClientIP(r, s.opts.TrustProxy)
-	token, user, err := s.auth.Login(r.Context(), ip, req.Username, req.Password, r.UserAgent())
+	token, user, ttl, err := s.auth.Login(r.Context(), ip, req.Username, req.Password, r.UserAgent(), req.Remember)
 	if err != nil {
 		status := http.StatusUnauthorized
 		if !errors.Is(err, auth.ErrInvalidCredentials) {
@@ -38,15 +41,20 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     auth.CookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   s.opts.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(auth.SessionTTL),
-	})
+	}
+	// Sem "manter conectado" o cookie não leva data: é de sessão, e o
+	// navegador o descarta ao fechar. A sessão no banco ainda expira sozinha.
+	if req.Remember {
+		cookie.Expires = time.Now().Add(ttl)
+	}
+	http.SetCookie(w, cookie)
 	writeJSON(w, http.StatusOK, userResponse{Username: user.Username, MustChangePassword: user.MustChangePassword, IsAdmin: user.IsAdmin})
 }
 

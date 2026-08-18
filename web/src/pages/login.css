@@ -1,0 +1,679 @@
+/* Tela de login: desenho próprio, com paleta e animações independentes do
+   resto do app. Vive em CSS comum porque são dunas, poeira e camadas de areia
+   em SVG — coisas que ficariam ilegíveis como classes utilitárias.
+
+   O tema vem da classe no <html> (.dark / .light), a mesma que o resto do app
+   usa, então o botão de tema continua sendo um só. */
+
+/* As mesmas fontes das telas de erro, servidas pelo próprio NAS. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/archivo-400-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/archivo-600-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/archivo-700-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-400-latin.woff2') format('woff2');
+}
+
+.tela-login {
+  --lg-sans: 'Archivo', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --lg-mono: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--lg-sans);
+  --lg-bg: #0d0f14;
+  --lg-card: #14161d;
+  --lg-field: #0e1015;
+  --lg-line: #23262f;
+  --lg-line-2: #2b3040;
+  --lg-line-3: #3a4152;
+  --lg-text: #f2f3f7;
+  --lg-muted: #8b90a0;
+  --lg-faint: #5f6577;
+  --lg-stone: #333850;
+  --lg-stone-2: #3f4661;
+  --lg-cut: #1a1e2a;
+  --lg-dune-0: #15182190;
+  --lg-dune-1: #191d29;
+  --lg-dune-2: #1e2331;
+  --lg-dune-3: #232939;
+  --lg-mote: #6b7390;
+  --lg-mote-op: 0.5;
+  --lg-violet: #8b7cff;
+  --lg-violet-2: #4b7bec;
+  --lg-violet-soft: #8b7cff26;
+  --lg-amber: #e0824a;
+  --lg-glow: radial-gradient(120% 90% at 50% -10%, #1e1b3a 0%, #0d0f14 58%);
+  /* O botão repete a construção do logo: corpo violeta, tinta escura.
+     Branco sobre esse violeta dava 3,27:1 e reprovava em contraste. */
+  --lg-btn-bg: #8b7cff;
+  --lg-btn-fg: #12101f;
+}
+
+/* Claro é a paleta de areia, a mesma das telas de erro. */
+:root.light .tela-login {
+  --lg-bg: #f6f3ee;
+  --lg-card: #fdfbf7;
+  --lg-field: #f1ece4;
+  --lg-line: #e2dbd0;
+  --lg-line-2: #cec5b6;
+  --lg-line-3: #b0a695;
+  --lg-text: #241e17;
+  --lg-muted: #665e53;
+  --lg-faint: #7d7466;
+  --lg-stone: #2b2118;
+  --lg-stone-2: #c98f3c;
+  --lg-cut: #f6f3ee;
+  --lg-dune-0: #e9e2d6;
+  --lg-dune-1: #e3dbcd;
+  --lg-dune-2: #dcd2c1;
+  --lg-dune-3: #d4c9b5;
+  --lg-mote: #ffffff;
+  --lg-mote-op: 0.75;
+  --lg-violet: #a8642c;
+  --lg-violet-2: #c98f3c;
+  --lg-violet-soft: #a8642c1f;
+  --lg-amber: #9c3f1d;
+  --lg-glow: radial-gradient(120% 90% at 50% -10%, #fffdf9 0%, #f2ece2 60%);
+  /* No claro, a marca é marrom sobre areia: o botão segue igual — tinta
+     sobre papel, e a terracota fica para os links. */
+  --lg-btn-bg: #2b2118;
+  --lg-btn-fg: #f7f4ee;
+}
+
+.tela-login {
+  min-height: 100dvh;
+  background: var(--lg-bg);
+  color: var(--lg-text);
+}
+
+.lg-shell {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  background: var(--lg-glow);
+}
+
+.lg-dunes-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lg-dunes {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 58%;
+}
+
+.lg-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 44px 56px 56px;
+}
+.lg-mark,
+.lg-pitch {
+  position: relative;
+  z-index: 1;
+}
+.lg-mark {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  animation: lg-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.lg-name {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.lg-sub {
+  font-family: var(--lg-mono);
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--lg-faint);
+}
+
+.lg-pitch {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: min(440px, 52%);
+}
+.lg-pitch h1 {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  text-wrap: pretty;
+  animation: lg-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s backwards;
+}
+.lg-pitch blockquote {
+  margin: 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--lg-line-2);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--lg-muted);
+  text-wrap: pretty;
+  animation: lg-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.18s backwards;
+}
+.lg-pitch cite {
+  display: block;
+  margin-top: 6px;
+  font-style: normal;
+  font-family: var(--lg-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--lg-faint);
+}
+
+.lg-pane {
+  position: relative;
+  z-index: 2;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 48px;
+  border-left: 1px solid var(--lg-line);
+  background: color-mix(in oklab, var(--lg-card) 78%, transparent);
+  backdrop-filter: blur(14px);
+}
+.lg-form {
+  width: 100%;
+  max-width: 372px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: lg-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.12s backwards;
+}
+.lg-head h2 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.lg-head p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--lg-muted);
+}
+
+.lg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-field > label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lg-muted);
+}
+.lg-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--lg-field);
+  border: 1px solid var(--lg-line);
+  border-radius: 11px;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.lg-wrap:focus-within {
+  border-color: var(--lg-violet);
+  box-shadow: 0 0 0 4px var(--lg-violet-soft);
+}
+.lg-wrap .lg-lead {
+  position: absolute;
+  left: 13px;
+  color: var(--lg-faint);
+  pointer-events: none;
+}
+.lg-wrap:focus-within .lg-lead {
+  color: var(--lg-violet);
+}
+.lg-wrap input {
+  width: 100%;
+  padding: 14px 14px 14px 42px;
+  border: 0;
+  background: transparent;
+  color: var(--lg-text);
+  font: 500 15px var(--lg-sans);
+  border-radius: 11px;
+}
+.lg-wrap input::placeholder {
+  color: var(--lg-faint);
+  font-weight: 400;
+}
+.lg-wrap input:focus {
+  outline: none;
+}
+.lg-peek {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lg-faint);
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
+}
+.lg-peek:hover {
+  color: var(--lg-text);
+  background: var(--lg-line);
+}
+
+.lg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lg-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--lg-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.lg-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.lg-box {
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  border: 1px solid var(--lg-line-3);
+  background: var(--lg-field);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+.lg-box svg {
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.lg-check input:checked + .lg-box {
+  background: var(--lg-violet);
+  border-color: var(--lg-violet);
+}
+.lg-check input:checked + .lg-box svg {
+  opacity: 1;
+  transform: none;
+}
+.lg-check input:focus-visible + .lg-box {
+  box-shadow: 0 0 0 4px var(--lg-violet-soft);
+}
+
+.lg-link {
+  font-size: 13px;
+  color: var(--lg-violet);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.lg-link:hover {
+  color: var(--lg-text);
+}
+
+.lg-submit {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid color-mix(in oklab, var(--lg-btn-bg) 84%, black);
+  border-radius: 11px;
+  cursor: pointer;
+  background: var(--lg-btn-bg);
+  color: var(--lg-btn-fg);
+  font: 600 15px var(--lg-sans);
+  /* Um fio de luz na aresta de cima dá volume sem virar brilho neon. */
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 22%, transparent);
+  transition:
+    background 0.14s ease,
+    transform 0.06s ease;
+}
+.lg-submit:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--lg-btn-bg) 91%, black);
+}
+/* Afunda um fio ao clicar, em vez de flutuar no hover. */
+.lg-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.lg-submit:focus-visible {
+  outline: 2px solid var(--lg-btn-bg);
+  outline-offset: 3px;
+}
+.lg-submit:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.lg-spin {
+  animation: lg-spin 0.8s linear infinite;
+}
+
+.lg-hint {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--lg-violet-soft);
+  border: 1px solid var(--lg-line-2);
+  font-size: 13px;
+  color: var(--lg-muted);
+}
+.lg-hint.lg-err {
+  background: color-mix(in oklab, var(--lg-amber) 12%, transparent);
+  border-color: color-mix(in oklab, var(--lg-amber) 30%, transparent);
+  color: var(--lg-text);
+}
+
+.lg-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 6px;
+}
+.lg-sep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--lg-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--lg-faint);
+}
+.lg-sep::before,
+.lg-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--lg-line);
+}
+.lg-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid var(--lg-line-2);
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lg-text);
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+.lg-ghost:hover {
+  border-color: var(--lg-line-3);
+  background: var(--lg-field);
+}
+.lg-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 4px;
+  font-family: var(--lg-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--lg-faint);
+}
+.lg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ec98a;
+  box-shadow: 0 0 0 3px #4ec98a26;
+  animation: lg-pulse 2.6s ease-in-out infinite;
+}
+
+.lg-theme {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--lg-line);
+  background: color-mix(in oklab, var(--lg-card) 80%, transparent);
+  color: var(--lg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+.lg-theme:hover {
+  color: var(--lg-text);
+  border-color: var(--lg-line-3);
+}
+
+.lg-mask {
+  display: none;
+  animation: lg-settle 1.6s cubic-bezier(0.16, 0.84, 0.24, 1) backwards;
+}
+@media (min-width: 1250px) {
+  .lg-mask {
+    display: block;
+  }
+}
+.lg-layer-1 {
+  animation: lg-sandUp 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards;
+}
+.lg-layer-2 {
+  animation: lg-sandUp 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.28s backwards;
+}
+.lg-haze {
+  animation: lg-driftX 90s linear infinite;
+  opacity: 0.9;
+}
+.lg-drift {
+  animation: lg-driftX 46s linear infinite;
+}
+.lg-mote {
+  opacity: 0;
+  animation-name: lg-mote;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.lg-nemes {
+  animation: lg-gleam 9s ease-in-out infinite;
+}
+.lg-shake {
+  animation: lg-shake 0.42s ease;
+}
+
+@keyframes lg-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lg-settle {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lg-sandUp {
+  from {
+    transform: translateY(30px);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes lg-driftX {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-820px);
+  }
+}
+@keyframes lg-gleam {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.78;
+  }
+}
+@keyframes lg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes lg-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes lg-mote {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  12% {
+    opacity: var(--lg-mote-op);
+  }
+  80% {
+    opacity: var(--lg-mote-op);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-70px, -180px);
+  }
+}
+@keyframes lg-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@media (max-width: 980px) {
+  .lg-shell {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .lg-stage {
+    padding: 30px 28px 34px;
+    gap: 26px;
+    min-height: auto;
+    justify-content: flex-start;
+  }
+  .lg-pitch {
+    margin-top: auto;
+    max-width: 100%;
+  }
+  .lg-pitch h1 {
+    font-size: 34px;
+  }
+  .lg-pitch blockquote {
+    display: none;
+  }
+  .lg-pane {
+    border-left: 0;
+    border-top: 1px solid var(--lg-line);
+    padding: 34px 24px 44px;
+    min-height: auto;
+  }
+  .lg-dunes {
+    height: 46%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tela-login *,
+  .tela-login *::before,
+  .tela-login *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

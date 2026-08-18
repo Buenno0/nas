@@ -75,12 +75,16 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string) err
 	}
 
 	// No modo tunnel o Go escuta só no loopback: o cloudflared é a única porta
-	// de entrada. No modo local, escuta em todas as interfaces para a LAN chegar.
-	host := "0.0.0.0"
+	// de entrada.
+	//
+	// No modo local o endereço fica sem host — ":8787" abre IPv4 e IPv6 ao
+	// mesmo tempo. Isso importa: o nome .local da máquina costuma resolver
+	// para um endereço IPv6 no macOS, então ouvir só em 0.0.0.0 fazia o acesso
+	// por IP funcionar e o por nome falhar.
+	addr := fmt.Sprintf(":%d", cfg.Port)
 	if m == modeTunnel {
-		host = "127.0.0.1"
+		addr = fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	}
-	addr := fmt.Sprintf("%s:%d", host, cfg.Port)
 
 	database, err := db.Open()
 	if err != nil {
@@ -109,6 +113,12 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string) err
 	fmt.Printf("\n  Ozymandias %s — modo %s\n", Version, m)
 	if m == modeLocal {
 		fmt.Printf("  http://localhost:%d\n", cfg.Port)
+		// O nome .local não muda quando o roteador troca o IP, então é o
+		// endereço que vale anotar. O QR fica com o IP, que qualquer aparelho
+		// resolve mesmo sem mDNS.
+		if nome := MDNSName(); nome != "" {
+			fmt.Printf("  http://%s:%d  (nome fixo na rede)\n", nome, cfg.Port)
+		}
 		announceShareURL("endereço na rede local", fmt.Sprintf("http://%s:%d", LANIP(), cfg.Port))
 	} else {
 		fmt.Printf("  http://127.0.0.1:%d  (só nesta máquina)\n", cfg.Port)

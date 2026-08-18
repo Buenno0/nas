@@ -36,7 +36,7 @@ func prepara(t *testing.T) (*Server, string, string) {
 	}
 
 	entrar := func(usuario, senha string) string {
-		token, _, err := srv.Auth().Login(ctx, "127.0.0.1", usuario, senha, "teste")
+		token, _, _, err := srv.Auth().Login(ctx, "127.0.0.1", usuario, senha, "teste", true)
 		if err != nil {
 			t.Fatalf("login de %s: %v", usuario, err)
 		}

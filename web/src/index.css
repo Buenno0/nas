@@ -64,12 +64,50 @@ body {
   display: none;
 }
 
+/* ---------- troca de tema ----------
+
+   O tema novo entra como um círculo que se abre a partir do botão clicado. O
+   navegador tira um retrato do antes e do depois; a animação do raio fica no
+   theme.tsx, e aqui só desligamos o esmaecimento cruzado que a API faz por
+   padrão — os dois retratos juntos deixariam a tela lavada no meio do caminho.
+
+   O retrato antigo fica embaixo, parado, e o novo é revelado por cima. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* Navegadores sem View Transitions ganham um esmaecimento curto nas cores.
+   Só durante a troca: manter essa transição sempre ligada faria cada hover
+   herdar um atraso de 300ms. */
+:root[data-tema-trocando='sim'],
+:root[data-tema-trocando='sim'] * {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    fill 0.3s ease !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Sem a exceção acima, o clip-path do círculo continuaria animando. */
+  ::view-transition-group(*),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
   }
 }
 

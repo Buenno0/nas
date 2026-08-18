@@ -26,6 +26,7 @@ Uso:
   nas meta [--all]         só metadados (--all refaz tudo)
   nas user add <usuário> [--admin]
   nas user ls | rm <usuário> | promote <usuário> | demote <usuário>
+  nas passwd <usuário>     redefine a senha (recuperação de acesso)
   nas status
   nas stop
   nas config [set <chave> <valor>]
@@ -55,6 +56,8 @@ func Run(args []string) int {
 		err = cmdMeta(ctx, rest)
 	case "user":
 		err = cmdUser(ctx, rest)
+	case "passwd":
+		err = cmdPasswd(ctx, rest)
 	case "config":
 		err = cmdConfig(rest)
 	case "status":
