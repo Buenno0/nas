@@ -192,6 +192,23 @@ valendo.
    deixar só na sua tailnet (cada aparelho com o app): `funnel = false`.
 5. `tofu apply` de novo. Em alguns minutos ela responde no endereço acima.
 
+## 7. Atualizar a nuvem depois de mudar o código
+
+A nuvem roda a imagem do último commit publicado. Depois de uma feature nova:
+
+```bash
+git commit …                      # só o que está commitado vai
+aws sso login --profile ozymandias-admin   # se a sessão venceu
+make atualizar-nuvem
+```
+
+Isso constrói a imagem no CodeBuild (~5 min), troca a instância cloud e espera
+ela ficar estável (1 a 3 min). Os workers pegam a imagem nova no próximo job,
+sozinhos. As migrations do banco rodam no arranque da instância, e o
+Litestream traz o estado dela de volta do bucket: nada se perde na troca.
+
+O Mac é à parte: `make install` e reiniciar o `nas serve`.
+
 ## Custos e como desligar
 
 | camada | custo/mês típico |

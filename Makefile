@@ -3,7 +3,7 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -s -w -X nas/internal/cli.Version=$(VERSION)
 PREFIX   ?= $(HOME)/.local/bin
 
-.PHONY: help build install uninstall run test fmt vet web comprimir web-dev clean contraste provas publicar-imagem
+.PHONY: help build install uninstall run test fmt vet web comprimir web-dev clean contraste provas publicar-imagem atualizar-nuvem
 
 help:
 	@echo "make build      compila bin/$(BINARY)"
@@ -72,3 +72,16 @@ publicar-imagem:
 	AWS_PROFILE=$(AWS_PROFILE) go run ./cmd/publicar-imagem \
 		--bucket $$(tofu -chdir=infra output -raw bucket_build) \
 		--projeto $$(tofu -chdir=infra output -raw projeto_build)
+
+# Leva a versão commitada para a AWS: publica a imagem (workers usam a nova no
+# próximo job) e troca a instância cloud, esperando ela ficar estável. O que
+# não foi commitado não vai; o aviso lembra disso.
+atualizar-nuvem:
+	@git diff --quiet HEAD -- . ':!turno3-claro' || echo "AVISO: há mudanças não commitadas; só o HEAD ($$(git rev-parse --short HEAD)) vai para a nuvem."
+	$(MAKE) publicar-imagem
+	AWS_PROFILE=$(AWS_PROFILE) aws ecs update-service --cluster ozymandias --service ozymandias-nuvem \
+		--force-new-deployment --query 'service.serviceName' --output text
+	@echo "trocando a instância cloud (1 a 3 min)…"
+	AWS_PROFILE=$(AWS_PROFILE) aws ecs wait services-stable --cluster ozymandias --services ozymandias-nuvem
+	@echo "pronto: nuvem em $$(git rev-parse --short HEAD)"
+
