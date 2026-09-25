@@ -263,6 +263,9 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
 
 	path := filepath.Join(dir, name)
 	f, err := os.Open(path)
+	if err != nil && kind == "posters" && s.opts.NaNuvem && s.sincro.PosterDaNuvem(r.Context(), name) {
+		f, err = os.Open(path)
+	}
 	if err != nil {
 		http.NotFound(w, r)
 		return

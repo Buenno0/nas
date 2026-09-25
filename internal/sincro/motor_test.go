@@ -90,7 +90,11 @@ func (m *memoria) Baixar(ctx context.Context, key string, desde int64) (io.ReadC
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return io.NopCloser(bytes.NewReader(m.objetos[key].dados[desde:])), nil
+	o, ok := m.objetos[key]
+	if !ok {
+		return nil, cloud.ErrNaoExiste // como o S3 (NoSuchKey)
+	}
+	return io.NopCloser(bytes.NewReader(o.dados[desde:])), nil
 }
 func (m *memoria) Gravar(ctx context.Context, key string, corpo []byte, _ string) error {
 	if err := m.toca(ctx); err != nil {

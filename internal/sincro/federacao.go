@@ -162,9 +162,37 @@ func (m *Motor) carregarSnapshot(ctx context.Context, arm cloud.Armazenamento) e
 	return m.db.GravaEstadoNuvem(ctx, "snapshot_etag", obj.ETag)
 }
 
+// PosterDaNuvem traz um pôster do bucket para o cache local, na hora em que
+// alguém pede. O disco do container é efêmero: depois de um reinício o banco
+// volta pelo Litestream, mas os arquivos de imagem não, e o snapshot (sem
+// mudança) não os baixaria de novo.
+func (m *Motor) PosterDaNuvem(ctx context.Context, nome string) bool {
+	if nome == "" || strings.ContainsAny(nome, `/\`) || strings.Contains(nome, "..") {
+		return false
+	}
+	arm, nctx, cancel, ok := m.chave.Vincular(ctx)
+	if !ok {
+		return false
+	}
+	defer cancel()
+	m.baixarPosters(nctx, arm, []string{nome})
+	dir, err := config.PosterDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(dir, nome))
+	return err == nil
+}
+
 func (m *Motor) baixarPosters(ctx context.Context, arm cloud.Armazenamento, nomes []string) {
 	dir, err := config.PosterDir()
 	if err != nil {
+		return
+	}
+	// Na instância cloud o cache nasce vazio: sem a pasta, nenhuma capa
+	// seria gravada.
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		log.Printf("pasta das capas: %v", err)
 		return
 	}
 	for _, nome := range nomes {
@@ -182,7 +210,12 @@ func (m *Motor) baixarPosters(ctx context.Context, arm cloud.Armazenamento, nome
 		dados, err := io.ReadAll(corpo)
 		corpo.Close()
 		if err == nil {
-			_ = os.WriteFile(destino, dados, 0o644)
+			// Via arquivo temporário: dois pedidos da mesma capa ao mesmo
+			// tempo não servem uma imagem pela metade.
+			tmp := destino + ".parcial"
+			if os.WriteFile(tmp, dados, 0o644) == nil {
+				_ = os.Rename(tmp, destino)
+			}
 		}
 	}
 }

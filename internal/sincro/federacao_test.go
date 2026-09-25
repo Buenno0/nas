@@ -3,6 +3,7 @@ package sincro
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -116,5 +117,30 @@ func TestSnapshotReplicaOMacNaNuvem(t *testing.T) {
 	}
 	if _, err := nv.db.ArquivoPorRef(ctx, db.Ref{Mac: local.Path}); err == nil {
 		t.Fatal("item removido no Mac continuou na nuvem")
+	}
+}
+
+// O disco do container é efêmero: depois de um reinício a capa some do cache,
+// mas o banco (Litestream) volta. Pedir a capa a traz de novo do bucket.
+func TestPosterVoltaDoBucketDepoisDoReinicio(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	a := montar(t)
+	ctx := context.Background()
+	arm, _, _ := a.chave.Hibrido()
+	if err := arm.Gravar(ctx, prefixoDosPoster+"w500_x.jpg", []byte("jpeg"), "image/jpeg"); err != nil {
+		t.Fatal(err)
+	}
+	nv := nuvemAoLado(t, a)
+	if !nv.PosterDaNuvem(ctx, "w500_x.jpg") {
+		t.Fatal("a capa não voltou do bucket")
+	}
+	dir, _ := config.PosterDir()
+	if dados, err := os.ReadFile(filepath.Join(dir, "w500_x.jpg")); err != nil || string(dados) != "jpeg" {
+		t.Fatalf("cache: %q %v", dados, err)
+	}
+	for _, ruim := range []string{"../ca.key", "a/b.jpg", "inexistente.jpg"} {
+		if nv.PosterDaNuvem(ctx, ruim) {
+			t.Fatalf("%q não deveria ser servido", ruim)
+		}
 	}
 }
