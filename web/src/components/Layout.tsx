@@ -6,6 +6,7 @@ import { useTheme } from '../lib/theme'
 import { useModoAoVivo, useModoNuvem } from '../lib/nuvem'
 import { MiniPlayer } from './MiniPlayer'
 import { CartaoDeEnvios } from './CartaoDeEnvios'
+import { EnviarAtalho } from './EnviarAtalho'
 import { Mark } from './Mark'
 import {
   ActivityIcon,
@@ -158,6 +159,7 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
             <ChipIcon /> Técnico
           </NavLink>
         )}
+        <EnviarAtalho variante="menu" />
         <NavLink to="/settings" className={navClass}>
           <SettingsIcon /> {admin ? 'Configurações' : 'Minha conta'}
         </NavLink>
@@ -291,6 +293,10 @@ function TopBar() {
           </label>
         </form>
 
+        {/* No computador o atalho já está na barra lateral. */}
+        <div className="lg:hidden">
+          <EnviarAtalho variante="icone" />
+        </div>
         <SeloDoModo />
 
         <button
