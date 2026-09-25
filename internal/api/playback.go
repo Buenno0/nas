@@ -16,6 +16,7 @@ import (
 	"nas/internal/cloud"
 	"nas/internal/db"
 	"nas/internal/media"
+	"nas/internal/sincro"
 )
 
 // A resposta que o player consulta antes de tocar qualquer coisa.
@@ -147,6 +148,14 @@ func (s *Server) planoDeArquivo(r *http.Request, arquivo db.MediaFile) (media.Pl
 		Receita: plano.Recipe,
 		Audio:   audio,
 	}
+	// Só na nuvem: a origem é uma URL assinada, preenchida só na hora de
+	// preparar (vale 6 h e muda a cada assinatura); o cache se orienta pela
+	// identidade.
+	if db.SoNaNuvem(arquivo.Localizacao) {
+		pedido.Origem = ""
+		pedido.Identidade = arquivo.Path
+		pedido.Tamanho = arquivo.Size
+	}
 	return plano, pedido
 }
 
@@ -194,9 +203,14 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, resp)
 			return
 		}
-		s.respostaDaNuvem(r.Context(), &resp, arquivo, true)
-		writeJSON(w, http.StatusOK, resp)
-		return
+		if s.preparaNoWorker(r.Context(), arquivo) {
+			s.respostaDaNuvem(r.Context(), &resp, arquivo, true)
+			writeJSON(w, http.StatusOK, resp)
+			return
+		}
+		// Sem worker: o Mac prepara lendo o original da nuvem. Daqui para
+		// baixo é o mesmo fluxo de um arquivo do disco.
+		resp.Motivo += " · preparando no Mac a partir da nuvem"
 	}
 
 	// Bursting: o arquivo também está no bucket e o Mac não está numa boa
@@ -257,7 +271,7 @@ func (s *Server) handlePrepareStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "arquivo não encontrado")
 		return
 	}
-	if db.SoNaNuvem(arquivo.Localizacao) {
+	if db.SoNaNuvem(arquivo.Localizacao) && s.preparaNoWorker(r.Context(), arquivo) {
 		if err := s.sincro.PedirProcessamento(r.Context(), arquivo.ID); err != nil {
 			writeError(w, statusDaSincro(err), err.Error())
 			return
@@ -285,8 +299,18 @@ func (s *Server) handlePrepareStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// O trabalho vive no contexto do servidor, não da requisição: o navegador
-	// pode desistir, o preparo continua; `nas stop` mata o ffmpeg junto.
-	progresso, err := s.preparador.Pedir(s.fundo, pedido)
+	// pode desistir, o preparo continua; `nas stop` mata o ffmpeg junto. Um
+	// item da nuvem lê o original por URL, e aí o contexto é o da nuvem.
+	fundo := s.fundo
+	if db.SoNaNuvem(arquivo.Localizacao) {
+		ctx, err := s.origemNaNuvem(&pedido, arquivo)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		fundo = ctx
+	}
+	progresso, err := s.preparador.Pedir(fundo, pedido)
 	if err != nil {
 		writeJSON(w, http.StatusInsufficientStorage, progresso)
 		return
@@ -307,8 +331,8 @@ func (s *Server) handlePrepareEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, pedido := s.planoDeArquivo(r, arquivo)
-	daNuvem := db.SoNaNuvem(arquivo.Localizacao)
-	if !daNuvem {
+	daNuvem := db.SoNaNuvem(arquivo.Localizacao) && s.preparaNoWorker(r.Context(), arquivo)
+	if !db.SoNaNuvem(arquivo.Localizacao) {
 		daNuvem, _ = s.prepararNaNuvem(r.Context(), arquivo, pedido)
 	}
 	consulta := func() media.Progresso {
@@ -396,6 +420,44 @@ func (s *Server) respostaDaNuvem(ctx context.Context, resp *respostaPlayback, ar
 	}
 }
 
+// preparaNoWorker decide quem prepara um item que só existe na nuvem. O worker
+// quando já preparou, quando há pedido recente para ele, ou quando algum worker
+// já respondeu neste Mac; senão o próprio Mac, lendo o original do bucket. Sem
+// isso, um Mac sem workers publicados deixava o player em "Preparando na
+// nuvem" para sempre.
+func (s *Server) preparaNoWorker(ctx context.Context, arquivo db.MediaFile) bool {
+	if _, err := s.db.DerivadoDe(ctx, arquivo.ID, "compat", 0); err == nil {
+		return true
+	}
+	if s.ConfigNuvem().FilaJobs == "" {
+		return false
+	}
+	estado, _, quando := s.db.ProcessamentoDesde(ctx, arquivo.ID)
+	if estado == "pedido" {
+		return time.Since(quando) < sincro.EsperaPeloWorker
+	}
+	if estado == "falhou" || estado == "concluido" {
+		return false // o worker não deu conta ou não gerou versão: o Mac faz
+	}
+	return s.sincro.WorkerVisto(ctx)
+}
+
+// origemNaNuvem assina a leitura do original para o ffmpeg do Mac. O preparo
+// nasce de um contexto preso ao kill switch: cortar a nuvem mata o ffmpeg que
+// lê dela.
+func (s *Server) origemNaNuvem(pedido *media.Pedido, arquivo db.MediaFile) (context.Context, error) {
+	arm, ctx, _, ok := s.nuvem.Vincular(s.fundo)
+	if !ok {
+		return nil, errors.New("modo local: a nuvem está desligada")
+	}
+	url, err := arm.URLDeLeitura(ctx, arquivo.NuvemKey, 6*time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	pedido.Origem = url
+	return ctx, nil
+}
+
 // prepararNaNuvem decide o bursting de um arquivo que está no Mac E no
 // bucket. Nunca para um arquivo só local: subir GBs custa mais que o
 // VideoToolbox do M4 recodificar. A decisão gruda: um pedido feito ao worker
@@ -421,6 +483,11 @@ func (s *Server) prepararNaNuvem(ctx context.Context, arquivo db.MediaFile, pedi
 		// O worker não gerou versão para este cliente: o Mac faz.
 		return false, ""
 	}
+	// Sem nenhum worker ter respondido, mandar para a nuvem é apostar numa
+	// fila que talvez ninguém leia: o Mac prepara, mesmo na bateria.
+	if !s.sincro.WorkerVisto(ctx) {
+		return false, ""
+	}
 	if e := s.opts.Energia.Estado(ctx); e.Ruim() {
 		return true, "Mac " + e.Motivo
 	}
@@ -436,8 +503,13 @@ func (s *Server) progressoNaNuvem(ctx context.Context, arquivo db.MediaFile) med
 	if _, err := s.db.DerivadoDe(ctx, arquivo.ID, "compat", 0); err == nil {
 		return media.Progresso{Estado: media.EstadoPronto, Percentual: 100, Receita: "nuvem"}
 	}
-	switch estado, erro := s.db.Processamento(ctx, arquivo.ID); estado {
+	estado, erro, quando := s.db.ProcessamentoDesde(ctx, arquivo.ID)
+	switch estado {
 	case "pedido":
+		if time.Since(quando) >= sincro.EsperaPeloWorker {
+			return media.Progresso{Estado: media.EstadoErro, Receita: "nuvem",
+				Erro: "nenhum worker da nuvem respondeu; abra de novo para o Mac preparar (ou publique a imagem com make publicar-imagem)"}
+		}
 		return media.Progresso{Estado: media.EstadoTrabalhando, Receita: "nuvem", Total: arquivo.Duration}
 	case "falhou":
 		return media.Progresso{Estado: media.EstadoErro, Receita: "nuvem", Erro: "o worker da nuvem falhou: " + erro}

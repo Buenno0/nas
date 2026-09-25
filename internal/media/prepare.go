@@ -57,6 +57,27 @@ type Pedido struct {
 	Receita string
 	// Audio é o índice absoluto da faixa escolhida; -1 usa a padrão do arquivo.
 	Audio int
+	// Identidade substitui Origem na chave do cache quando a origem é uma URL
+	// assinada da nuvem, que muda a cada assinatura (e pode nem estar
+	// preenchida numa consulta). Tamanho substitui o stat da origem na conta
+	// de espaço.
+	Identidade string
+	Tamanho    int64
+}
+
+func (p Pedido) identidade() string {
+	if p.Identidade != "" {
+		return p.Identidade
+	}
+	return p.Origem
+}
+
+// nome é o que aparece nos logs: o arquivo, não a URL assinada inteira.
+func (p Pedido) nome() string {
+	if p.Identidade != "" {
+		return filepath.Base(p.Identidade)
+	}
+	return filepath.Base(p.Origem)
 }
 
 // versaoDasReceitas invalida o cache inteiro quando as receitas mudam. Foi para
@@ -72,7 +93,7 @@ const versaoDasReceitas = 2
 func (p Pedido) Chave() string {
 	return fmt.Sprintf("%s_v%d_%s.mp4",
 		p.Receita, versaoDasReceitas,
-		hashCurto(fmt.Sprintf("%s|%d|a%d", p.Origem, p.MTime, p.Audio)))
+		hashCurto(fmt.Sprintf("%s|%d|a%d", p.identidade(), p.MTime, p.Audio)))
 }
 
 // Preparador executa e acompanha os preparos. Um por servidor.
@@ -291,7 +312,7 @@ func (p *Preparador) executar(ctx context.Context, t *trabalho) {
 
 	if err := cmd.Wait(); err != nil {
 		if ctx.Err() != nil {
-			log.Printf("preparo de %s cancelado", filepath.Base(t.pedido.Origem))
+			log.Printf("preparo de %s cancelado", t.pedido.nome())
 			return
 		}
 		p.falhar(t, fmt.Errorf("ffmpeg: %s", primeiraLinha(erroDoFFmpeg.String())))
@@ -309,7 +330,7 @@ func (p *Preparador) executar(ctx context.Context, t *trabalho) {
 
 	decorrido := time.Since(inicio)
 	log.Printf("preparo pronto: %s (%s) em %s",
-		filepath.Base(t.pedido.Origem), NomeDaReceita(t.pedido.Receita), decorrido.Round(time.Second))
+		t.pedido.nome(), NomeDaReceita(t.pedido.Receita), decorrido.Round(time.Second))
 	p.atualizar(t, func(pr *Progresso) {
 		pr.Estado = EstadoPronto
 		pr.Percentual = 100
@@ -353,7 +374,7 @@ func (p *Preparador) lerProgresso(t *trabalho, saida io.Reader, inicio time.Time
 }
 
 func (p *Preparador) falhar(t *trabalho, err error) {
-	log.Printf("preparo de %s falhou: %v", filepath.Base(t.pedido.Origem), err)
+	log.Printf("preparo de %s falhou: %v", t.pedido.nome(), err)
 	p.atualizar(t, func(pr *Progresso) {
 		pr.Estado = EstadoErro
 		pr.Erro = err.Error()

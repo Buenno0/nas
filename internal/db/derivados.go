@@ -78,3 +78,15 @@ func (d *DB) FileIDPorNuvemKey(ctx context.Context, key string) (int64, error) {
 	}
 	return id, err
 }
+
+// ProcessamentoDesde é o Processamento com a hora do último pedido ou
+// resposta, para o Mac saber quando desistir de um worker que não responde.
+func (d *DB) ProcessamentoDesde(ctx context.Context, fileID int64) (estado, erro string, quando time.Time) {
+	var em int64
+	_ = d.QueryRowContext(ctx,
+		`SELECT estado, erro, atualizado FROM processamento WHERE media_file_id = ?`, fileID).Scan(&estado, &erro, &em)
+	if em > 0 {
+		quando = time.Unix(em, 0)
+	}
+	return estado, erro, quando
+}

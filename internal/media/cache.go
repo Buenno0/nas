@@ -25,9 +25,11 @@ func hashCurto(s string) string {
 func (p *Preparador) cabeNoDisco(pedido Pedido) error {
 	// Estimativa grosseira: remux ocupa o tamanho do original; recodificação
 	// costuma caber em metade. Sem duração, assume o tamanho do original.
-	var estimado int64
+	estimado := pedido.Tamanho
 	if info, err := os.Stat(pedido.Origem); err == nil {
 		estimado = info.Size()
+	}
+	if estimado > 0 {
 		if pedido.Receita == "video1080" {
 			estimado /= 2
 		}

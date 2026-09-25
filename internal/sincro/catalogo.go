@@ -12,6 +12,17 @@ import (
 	"nas/internal/scan"
 )
 
+// EsperaPeloWorker é quanto o Mac espera por um job antes de preparar ele
+// mesmo: sem worker publicado (imagem ausente no ECR, Spot sem capacidade), o
+// pedido ficaria na fila para sempre e o player, esperando.
+const EsperaPeloWorker = 15 * time.Minute
+
+// WorkerVisto diz se algum worker já respondeu um job neste Mac. Antes disso,
+// mandar preparo para a nuvem é apostar numa fila que talvez ninguém leia.
+func (m *Motor) WorkerVisto(ctx context.Context) bool {
+	return m.db.EstadoNuvem(ctx, "worker_visto") != ""
+}
+
 // ErrSemProcessamento: a nuvem não tem fila de jobs configurada.
 var ErrSemProcessamento = errors.New("processamento na nuvem não configurado (nuvem.fila_jobs)")
 
@@ -38,7 +49,9 @@ func (m *Motor) PedirProcessamento(ctx context.Context, fileID int64) error {
 	if f.NuvemKey == "" {
 		return ErrEstado
 	}
-	if estado, _ := m.db.Processamento(ctx, fileID); estado == "pedido" {
+	// Pedido recente: não repete. Um pedido velho sem resposta é refeito (o
+	// worker pode ter sido publicado depois).
+	if estado, _, quando := m.db.ProcessamentoDesde(ctx, fileID); estado == "pedido" && time.Since(quando) < EsperaPeloWorker {
 		return nil
 	}
 	corpo, _ := json.Marshal(cloud.Job{SchemaVersion: cloud.VersaoDoContrato, Tipo: "processar", Key: f.NuvemKey, Origem: "mac"})
@@ -126,6 +139,10 @@ func (m *Motor) AplicarEvento(ctx context.Context, arm cloud.Armazenamento, corp
 		return nil // chave fora de qualquer biblioteca daqui
 	}
 
+	// Qualquer resposta prova que existe um worker do outro lado da fila.
+	if ev.Tipo == "job.concluido" || ev.Tipo == "job.falhou" {
+		_ = m.db.GravaEstadoNuvem(ctx, "worker_visto", time.Now().Format(time.RFC3339))
+	}
 	switch ev.Tipo {
 	case "job.falhou":
 		return m.db.MarcaProcessamento(ctx, fileID, "falhou", ev.Erro)

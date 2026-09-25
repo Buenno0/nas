@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"nas/internal/cloud"
 	"nas/internal/config"
@@ -76,9 +78,11 @@ func playback(t *testing.T, srv *Server, token string, id int64) respostaPlaybac
 	return pb
 }
 
-// Na bateria, um arquivo que também está no bucket é preparado pelo worker.
+// Na bateria, um arquivo que também está no bucket é preparado pelo worker —
+// desde que algum worker já tenha respondido neste Mac.
 func TestBurstingNaBateria(t *testing.T) {
 	srv, token, fila, f := preparaHibrido(t, energia.Estado{NaBateria: true, Motivo: "na bateria"})
+	srv.db.GravaEstadoNuvem(context.Background(), "worker_visto", "sim")
 
 	pb := playback(t, srv, token, f.ID)
 	if pb.Preparo == nil || pb.Preparo.Receita != "nuvem" {
@@ -106,5 +110,49 @@ func TestSemBurstingNaTomada(t *testing.T) {
 	}
 	if len(fila.jobs) != 0 {
 		t.Fatal("job enviado com o Mac na tomada")
+	}
+}
+
+// Sem nenhum worker ter respondido, nem a bateria manda preparo para a nuvem:
+// a fila pode não ter ninguém lendo, e o player esperaria para sempre.
+func TestSemWorkerNaoHaBursting(t *testing.T) {
+	srv, token, fila, f := preparaHibrido(t, energia.Estado{NaBateria: true, Motivo: "na bateria"})
+	if pb := playback(t, srv, token, f.ID); pb.Preparo != nil && pb.Preparo.Receita == "nuvem" {
+		t.Fatalf("sem worker visto, preparou na nuvem: %+v", pb.Preparo)
+	}
+	if len(fila.jobs) != 0 {
+		t.Fatal("job enviado sem worker visto")
+	}
+}
+
+// Item só da nuvem, sem worker: o Mac prepara (o plano segue o fluxo local).
+// Com worker visto, vai para a fila; um pedido velho sem resposta expira.
+func TestItemDaNuvemSemWorker(t *testing.T) {
+	srv, token, fila, f := preparaHibrido(t, energia.Estado{})
+	ctx := context.Background()
+	srv.db.MudaCaminho(ctx, f.ID, "nuvem:"+f.NuvemKey, db.LocalNuvem, "", f.MTime)
+
+	pb := playback(t, srv, token, f.ID)
+	if pb.Preparo != nil && pb.Preparo.Receita == "nuvem" {
+		t.Fatalf("sem worker, esperava preparo no Mac: %+v", pb)
+	}
+	if !strings.Contains(pb.Motivo, "no Mac a partir da nuvem") {
+		t.Fatalf("motivo não diz que o Mac prepara: %q", pb.Motivo)
+	}
+
+	srv.db.GravaEstadoNuvem(ctx, "worker_visto", "sim")
+	if pb := playback(t, srv, token, f.ID); pb.Preparo == nil || pb.Preparo.Receita != "nuvem" {
+		t.Fatalf("com worker visto, esperava a nuvem: %+v", pb)
+	}
+	chama(t, srv, http.MethodPost, fmt.Sprintf("/api/files/%d/prepare", f.ID), token, "")
+	if len(fila.jobs) != 1 {
+		t.Fatalf("esperava 1 job, veio %d", len(fila.jobs))
+	}
+
+	// Pedido de 20 min atrás, sem resposta: o Mac assume.
+	srv.db.ExecContext(ctx, `UPDATE processamento SET atualizado = ? WHERE media_file_id = ?`,
+		time.Now().Add(-20*time.Minute).Unix(), f.ID)
+	if pb := playback(t, srv, token, f.ID); pb.Preparo != nil && pb.Preparo.Receita == "nuvem" {
+		t.Fatalf("pedido expirado ainda espera o worker: %+v", pb.Preparo)
 	}
 }
