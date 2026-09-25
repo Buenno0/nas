@@ -95,13 +95,24 @@ resource "aws_iam_role_policy" "nuvem" {
 }
 
 # A execução precisa ler a auth key do Tailscale para injetá-la no sidecar.
+resource "aws_ssm_parameter" "tmdb" {
+  count = var.tailscale_authkey != "" && var.tmdb_key != "" ? 1 : 0
+  name  = "/ozymandias/tmdb/chave"
+  type  = "SecureString"
+  value = var.tmdb_key
+}
+
 resource "aws_iam_role_policy" "execucao_segredos" {
   count = var.tailscale_authkey == "" ? 0 : 1
   name  = "segredos-da-instancia"
   role  = aws_iam_role.execucao.id
   policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [{ Effect = "Allow", Action = ["ssm:GetParameters"], Resource = aws_ssm_parameter.tailscale[0].arn }]
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameters"]
+      Resource = concat([aws_ssm_parameter.tailscale[0].arn], aws_ssm_parameter.tmdb[*].arn)
+    }]
   })
 }
 
@@ -154,6 +165,7 @@ resource "aws_ecs_task_definition" "nuvem" {
         { name = "NAS_CDN_CHAVE_ID", value = aws_cloudfront_public_key.cdn.id },
         { name = "NAS_CDN_PARAMETRO", value = aws_ssm_parameter.chave_cdn.name },
       ]
+      secrets          = [for p in aws_ssm_parameter.tmdb : { name = "NAS_TMDB_KEY", valueFrom = p.arn }]
       logConfiguration = local.log
     },
     {

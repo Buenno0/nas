@@ -59,3 +59,10 @@ variable "funnel" {
   type        = bool
   default     = true
 }
+
+variable "tmdb_key" {
+  description = "Chave do TMDB para a instância cloud dar capa na hora ao que for enviado por ela. Vai para o SSM como SecureString. Vazio: a capa chega depois, pelo snapshot do Mac."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

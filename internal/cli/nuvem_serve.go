@@ -52,6 +52,11 @@ func serveNuvem(ctx context.Context, portOverride int) error {
 	cfg.Nuvem = nuvemDoAmbiente()
 	cfg.Nuvem.Papel = config.PapelNuvem
 	cfg.Modo = config.ModoHibrido
+	// Chave do TMDB (SSM → secret do ECS): capa na hora para o que for
+	// enviado por aqui. Sem ela, a capa chega depois, pelo snapshot do Mac.
+	if k := strings.TrimSpace(os.Getenv("NAS_TMDB_KEY")); k != "" {
+		cfg.TMDBKey = k
+	}
 	// 0,5 vCPU não transcodifica nada: preparo de item da nuvem é do worker.
 	cfg.Transcode = false
 	if p, err := strconv.Atoi(os.Getenv("NAS_PORTA")); err == nil && p > 0 {
