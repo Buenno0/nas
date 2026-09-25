@@ -1,9 +1,14 @@
 bucket       = "ozymandias-midia-SEUNOME"
 regiao       = "us-east-1"
 email_alerta = "voce@exemplo.com"
-origens_web  = ["http://localhost:8787", "http://SEU-MAC.local:8787"]
+orcamento_usd = 15
+origens_web  = ["http://localhost:8787", "http://SEU-MAC.local:8787", "https://*.ts.net"]
 ca_pem       = <<-EOT
 -----BEGIN CERTIFICATE-----
 ...
 -----END CERTIFICATE-----
 EOT
+
+# Opcional: instância cloud (docs/aws.md, passo 6).
+# tailscale_authkey = "tskey-auth-..."
+# funnel            = false
