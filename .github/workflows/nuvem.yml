@@ -1,0 +1,53 @@
+# Publica a imagem e troca a instância cloud a cada push na master.
+# Configure no GitHub (Settings → Secrets and variables → Actions → Variables):
+#   AWS_ROLE_ARN   tofu -chdir=infra output -raw github_role_arn
+#   BUCKET_BUILD   tofu -chdir=infra output -raw bucket_build
+name: nuvem
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "**.md"
+      - "infra/**"
+      - "turno3-claro/**"
+  workflow_dispatch:
+
+# Dois pushes seguidos: o segundo espera o primeiro, nunca rodam juntos.
+concurrency:
+  group: nuvem
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # o token OIDC que a AWS troca por credencial de 1 h
+  contents: read
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: testes
+        run: go test ./...
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: imagem (CodeBuild)
+        run: go run ./cmd/publicar-imagem --bucket "${{ vars.BUCKET_BUILD }}" --projeto ozymandias-imagem --regiao us-east-1
+
+      - name: trocar a instância cloud
+        run: |
+          aws ecs update-service --cluster ozymandias --service ozymandias-nuvem --force-new-deployment --query 'service.serviceName' --output text
+          aws ecs wait services-stable --cluster ozymandias --services ozymandias-nuvem
+          echo "nuvem em ${GITHUB_SHA::7}"
