@@ -1,6 +1,8 @@
 import { Link } from 'react-router'
 import type { TitleCard } from '../lib/api'
 import { gradientFor, humanDuration, initials, kindLabel } from '../lib/format'
+import { useHibrido } from '../lib/nuvem'
+import { CloudIcon, CloudOffIcon } from './icons'
 
 interface PosterProps {
   title: TitleCard
@@ -10,6 +12,8 @@ interface PosterProps {
 }
 
 export function Poster({ title, progress, subtitle }: PosterProps) {
+  const hibrido = useHibrido()
+  const indisponivel = title.so_na_nuvem && !hibrido
   const meta = subtitle ?? [title.year || '', humanDuration(title.duration)].filter(Boolean).join(' · ')
 
   return (
@@ -24,7 +28,10 @@ export function Poster({ title, progress, subtitle }: PosterProps) {
             src={title.poster}
             alt=""
             loading="lazy"
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+            className={[
+              'h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]',
+              indisponivel ? 'opacity-45 grayscale' : '',
+            ].join(' ')}
           />
         ) : (
           <div
@@ -41,6 +48,20 @@ export function Poster({ title, progress, subtitle }: PosterProps) {
         <span className="absolute top-2 left-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-white/90 backdrop-blur-sm">
           {kindLabel[title.kind] ?? title.kind}
         </span>
+
+        {title.so_na_nuvem && (
+          <span
+            title={indisponivel ? 'Na nuvem, indisponível no modo local' : 'Toca direto da nuvem'}
+            className="absolute top-2 right-2 grid h-6 w-6 place-items-center rounded-md bg-black/55 text-white/90 backdrop-blur-sm"
+          >
+            {indisponivel ? <CloudOffIcon width="0.9em" height="0.9em" /> : <CloudIcon width="0.9em" height="0.9em" />}
+          </span>
+        )}
+        {indisponivel && (
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-2 pt-6 pb-2 text-center text-[11px] font-medium text-white/90">
+            Na nuvem · indisponível
+          </div>
+        )}
 
         {progress !== undefined && progress > 0 && (
           <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">

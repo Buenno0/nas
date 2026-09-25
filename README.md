@@ -77,6 +77,8 @@ digite o IP, mesmo quando o roteador atribui outro endereço ao computador.
 | `nas user promote\|demote <nome>` | muda o papel |
 | `nas passwd <nome>` | redefine a senha de alguém (recuperação de acesso) |
 | `nas config [set <chave> <valor>]` | mostra ou altera a configuração |
+| `nas modo [local\|hibrido]` | modo de nuvem; `local` é o kill switch |
+| `nas push <arquivo> [--lib N]` | envia ao bucket (modo híbrido) |
 | `nas status` / `nas stop` | estado da instância / encerra |
 
 O tipo da biblioteca é inferido pelo nome da pasta quando possível
@@ -617,6 +619,66 @@ Limitado a 8 conexões abertas e 8 ociosas. **Isto não é ganho de latência**:
 dentro do ruído (204µs contra 208µs por query). É teto de recurso — o padrão
 abre conexões sem limite, cada uma com seu cache de páginas, e uma rajada podia
 subir a memória sem dar vazão nenhuma, já que SQLite serializa escrita.
+
+## Modo de nuvem: local ⇄ híbrido
+
+Independente do acesso LAN/Tunnel, o Ozymandias tem um segundo eixo: o **modo
+de nuvem**. O desenho completo está em `PLANO-HIBRIDO.md`; o que existe hoje é
+o MVP.
+
+- **local** (padrão): o Mac não faz nenhuma chamada à AWS. Itens que moram só
+  no bucket continuam no catálogo, marcados "na nuvem, indisponível".
+- **híbrido**: o bucket S3 é armazenamento de verdade. Itens da nuvem tocam
+  direto do bucket (URL assinada de 1 h), sem passar os bytes pelo Mac.
+
+```bash
+nas config set nuvem.bucket ozymandias-midia
+nas config set nuvem.regiao us-east-1
+nas config set nuvem.perfil ozymandias   # perfil do ~/.aws/config (Roles Anywhere)
+nas modo hibrido                         # grava e avisa o servidor no ar (SIGHUP)
+nas modo local                           # kill switch
+nas serve --sem-nuvem                    # break-glass: ignora o config nesta execução
+```
+
+O **kill switch** troca um estado atômico e cancela o contexto raiz de todo
+trabalho de nuvem: uploads, assinaturas e ffmpeg lendo URLs do bucket. Todo
+cliente HTTP de nuvem passa por um guard que, no modo local, recusa a
+requisição e soma em `nuvem_bloqueadas_total` (visível em Configurações e em
+`/api/metrics/status`). Falhar ao ligar o híbrido volta para local com o erro
+na tela: nunca fica meio-conectado.
+
+**Upload.** Em Configurações → *Enviar para a nuvem*, o navegador fatia o
+arquivo e manda as partes direto ao S3 (multipart com URLs assinadas). O kill
+switch pausa o envio; ao voltar o híbrido, ele retoma das partes que o bucket
+já tem. Pelo terminal:
+
+```bash
+nas push ~/Filmes/Duna.mkv          # já está numa biblioteca: vira "no Mac e na nuvem"
+nas push ~/Downloads/x.mkv --lib 1  # fora das bibliotecas: entra como item só da nuvem
+```
+
+O push também é retomável: rodar de novo continua de onde parou.
+
+**Localização.** Cada arquivo é `local`, `enviando`, `ambos`, `baixando` ou
+`nuvem`. O scan nunca apaga itens `nuvem`, e um item `ambos` cujo arquivo
+local sumiu volta a ser `nuvem` em vez de sair do catálogo.
+
+**Infra.** `infra/` tem o OpenTofu do bucket (versioning, CORS com
+`ExposeHeaders: ETag`, que o upload do navegador exige, lifecycle de multipart
+órfão, Intelligent-Tiering), da identidade (IAM Roles Anywhere, role restrita
+a `bibliotecas/*`) e do Budgets. Copie `terraform.tfvars.exemplo` e rode
+`tofu apply`; os outputs trazem o perfil do `~/.aws/config` e os comandos
+`nas config`. Se você usar `nuvem.prefixo`, ajuste o `Resource` da policy.
+
+**Sem SDK da AWS.** `go build -tags nocloud` gera um binário sem o SDK; o modo
+local continua inteiro e o híbrido responde "sem suporte".
+
+Teste do adapter contra MinIO (sem AWS): veja o comentário em
+`internal/cloud/aws/s3_test.go`.
+
+Ainda não existe (fases seguintes do plano): fixar/liberar espaço, outbox e
+reconciliação, CloudFront, preparo (transcodificação) de itens da nuvem,
+workers em Docker e instância cloud.
 
 ## Limitações conhecidas
 

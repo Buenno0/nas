@@ -205,6 +205,7 @@ export function Watch() {
   useEffect(() => {
     const video = videoRef.current
     if (!video || !plano) return
+    if (plano.indisponivel) return
     const alvo = plano.url || (plano.modo === 'direct' ? plano.url_direta : '')
     if (!alvo) return
     if (video.getAttribute('src') === alvo) return
@@ -415,6 +416,19 @@ export function Watch() {
           />
         )}
       </video>
+
+      {/* Item que mora só no bucket, com o modo local: existe, não toca. */}
+      {plano?.indisponivel && (
+        <div className="absolute inset-0 grid place-items-center bg-black/85 p-6 text-center text-white">
+          <div className="max-w-sm">
+            <p className="text-lg font-semibold">Na nuvem, indisponível</p>
+            <p className="mt-2 text-sm text-white/70">
+              Este arquivo mora só no bucket e o servidor está no modo local. Ligue o híbrido em
+              Configurações para tocar.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Preparo em curso: o vídeo ainda não tem fonte, então esta é a tela.
           Antes daqui existir, o caso HEVC dava tela preta com um comando de

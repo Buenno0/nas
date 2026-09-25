@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"nas/internal/api"
+	"nas/internal/cloud"
 	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/lock"
@@ -29,6 +30,7 @@ func cmdServe(ctx context.Context, args []string) error {
 	tunnelFlag := fs.Bool("tunnel", false, "servir por um tunnel Cloudflare")
 	name := fs.String("tunnel-name", "", "tunnel nomeado do cloudflared (padrão: quick tunnel)")
 	port := fs.Int("port", 0, "porta (sobrescreve a configuração)")
+	semNuvem := fs.Bool("sem-nuvem", false, "força o modo de nuvem local nesta execução, ignorando o config (break-glass)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -40,10 +42,10 @@ func cmdServe(ctx context.Context, args []string) error {
 	if *tunnelFlag {
 		m = modeTunnel
 	}
-	return serve(ctx, m, *port, *name)
+	return serve(ctx, m, *port, *name, *semNuvem)
 }
 
-func serve(ctx context.Context, m mode, portOverride int, tunnelName string) error {
+func serve(ctx context.Context, m mode, portOverride int, tunnelName string, semNuvem bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -92,9 +94,14 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string) err
 	}
 	defer database.Close()
 
-	srv := api.New(cfg, database, api.Options{
+	// O kill switch nasce em LOCAL. A função de config é lida a cada
+	// conexão, então um SIGHUP com bucket novo vale sem reiniciar.
+	var srv *api.Server
+	chave := cloud.Nova(func() config.Nuvem { return srv.ConfigNuvem() }, semNuvem)
+	srv = api.New(cfg, database, api.Options{
 		SecureCookies: m == modeTunnel,
 		TrustProxy:    m == modeTunnel,
+		Nuvem:         chave,
 	})
 	if m == modeLocal {
 		stopDiscovery, err := announceOzymandias(cfg.Port)
@@ -140,6 +147,8 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string) err
 		go runTunnel(ctx, cfg.Port, tunnelName, l)
 	}
 	fmt.Println("\n  Ctrl+C para parar.")
+
+	go vigiarModo(ctx, srv, cfg, semNuvem)
 
 	err = srv.Serve(ctx, addr)
 	fmt.Println("\n  encerrado.")
@@ -230,7 +239,7 @@ func runMenu(ctx context.Context) int {
 		return 2
 	}
 
-	if err := serve(ctx, m, 0, ""); err != nil {
+	if err := serve(ctx, m, 0, "", false); err != nil {
 		fmt.Fprintln(os.Stderr, "erro:", err)
 		return 1
 	}

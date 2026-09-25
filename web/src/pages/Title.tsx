@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, downloadUrl, type FileInfo, type TitleDetail } from '../lib/api'
+import { api, downloadUrl, soNaNuvem, type FileInfo, type TitleDetail } from '../lib/api'
+import { useHibrido } from '../lib/nuvem'
 import { clockTime, gradientFor, humanDuration, humanSize, kindLabel } from '../lib/format'
-import { DownloadIcon, HeartIcon, PauseIcon, PlayIcon } from '../components/icons'
+import { CloudOffIcon, DownloadIcon, HeartIcon, PauseIcon, PlayIcon } from '../components/icons'
 import { ErrorState, Spinner } from '../components/states'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { ColecaoPicker } from '../components/ColecaoPicker'
@@ -385,6 +386,7 @@ function TrackList({ detail }: { detail: TitleDetail }) {
 }
 
 function FileList({ files }: { files: FileInfo[] }) {
+  const hibrido = useHibrido()
   if (files.length === 0) return null
 
   return (
@@ -399,13 +401,22 @@ function FileList({ files }: { files: FileInfo[] }) {
         return (
           <li key={file.id} className="relative">
             <div className="flex items-center gap-3 px-3 py-3 sm:px-4">
-              <Link
-                to={`/watch/${file.id}`}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-elev text-ink transition hover:bg-accent hover:text-accent-ink"
-                aria-label={`Reproduzir ${label}`}
-              >
-                <PlayIcon />
-              </Link>
+              {soNaNuvem(file.localizacao) && !hibrido ? (
+                <span
+                  title="Na nuvem, indisponível no modo local"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-elev text-muted"
+                >
+                  <CloudOffIcon />
+                </span>
+              ) : (
+                <Link
+                  to={`/watch/${file.id}`}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-elev text-ink transition hover:bg-accent hover:text-accent-ink"
+                  aria-label={`Reproduzir ${label}`}
+                >
+                  <PlayIcon />
+                </Link>
+              )}
 
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-1 text-sm font-medium">{label}</p>
@@ -416,6 +427,13 @@ function FileList({ files }: { files: FileInfo[] }) {
                     file.vcodec || file.acodec,
                     humanSize(file.size),
                     file.finished ? 'assistido' : '',
+                    soNaNuvem(file.localizacao)
+                      ? hibrido
+                        ? 'na nuvem'
+                        : 'na nuvem, indisponível'
+                      : file.localizacao === 'ambos'
+                        ? 'no Mac e na nuvem'
+                        : '',
                   ]
                     .filter(Boolean)
                     .join(' · ')}

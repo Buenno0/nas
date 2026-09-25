@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"nas/internal/cloud"
 	"nas/internal/db"
 	"nas/internal/media"
 )
@@ -28,6 +29,10 @@ type respostaPlayback struct {
 	Preparo   *media.Progresso `json:"preparo,omitempty"`
 	FFmpeg    bool             `json:"ffmpeg"`
 	Ativo     bool             `json:"transcodificacao_ativa"`
+	// Localizacao do arquivo; Indisponivel quando ele só existe na nuvem e o
+	// modo é local.
+	Localizacao  string `json:"localizacao"`
+	Indisponivel bool   `json:"indisponivel,omitempty"`
 }
 
 // paramsDoPlano são os parâmetros que entram na escolha da receita — e,
@@ -159,11 +164,30 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request) {
 
 	plano, pedido := s.planoDeArquivo(r, arquivo)
 	resp := respostaPlayback{
-		Modo:      plano.Mode,
-		Motivo:    plano.Reason,
-		URLDireta: fmt.Sprintf("/stream/%d", arquivo.ID),
-		FFmpeg:    s.ffmpegAvailable(),
-		Ativo:     s.transcodeAtivo(),
+		Modo:        plano.Mode,
+		Motivo:      plano.Reason,
+		URLDireta:   fmt.Sprintf("/stream/%d", arquivo.ID),
+		FFmpeg:      s.ffmpegAvailable(),
+		Ativo:       s.transcodeAtivo(),
+		Localizacao: arquivo.Localizacao,
+	}
+
+	// Item só da nuvem: toca direto da CDN/bucket ou não toca. O preparo
+	// (transcodificação) de itens da nuvem é trabalho dos workers do V3.
+	if db.SoNaNuvem(arquivo.Localizacao) {
+		if s.nuvem.Modo() != cloud.ModoHibrido {
+			resp.Indisponivel = true
+			resp.Motivo = "na nuvem, indisponível no modo local"
+			writeJSON(w, http.StatusOK, resp)
+			return
+		}
+		if plano.Mode != media.ModeDirect {
+			resp.Motivo = "na nuvem: tentando o original (preparo de itens da nuvem ainda não existe)"
+		}
+		resp.Modo = media.ModeDirect
+		resp.URL = resp.URLDireta
+		writeJSON(w, http.StatusOK, resp)
+		return
 	}
 
 	if plano.Mode == media.ModeDirect {
@@ -210,6 +234,10 @@ func (s *Server) handlePrepareStart(w http.ResponseWriter, r *http.Request) {
 	arquivo, err := s.db.FileByID(r.Context(), atoi64(r.PathValue("id")))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "arquivo não encontrado")
+		return
+	}
+	if db.SoNaNuvem(arquivo.Localizacao) {
+		writeError(w, http.StatusConflict, "itens só da nuvem ainda não são preparados")
 		return
 	}
 	if !s.transcodeAtivo() {

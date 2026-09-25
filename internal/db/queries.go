@@ -24,6 +24,9 @@ type TitleCard struct {
 	Files     int       `json:"files"`
 	Duration  float64   `json:"duration,omitempty"`
 	MetaState string    `json:"meta_state"`
+	// SoNaNuvem: nenhum arquivo do título tem cópia no Mac. No modo local o
+	// card aparece como "na nuvem, indisponível".
+	SoNaNuvem bool `json:"so_na_nuvem,omitempty"`
 }
 
 // TitleFilter monta a listagem da biblioteca.
@@ -45,7 +48,9 @@ const titleCardSelect = `
 	SELECT t.id, t.library_id, t.kind, t.name, IFNULL(t.year, 0), t.artist,
 	       IFNULL(t.rating, 0), t.poster, t.backdrop, t.genres, t.meta_state,
 	       (SELECT COUNT(*) FROM media_files f WHERE f.title_id = t.id),
-	       (SELECT IFNULL(SUM(f.duration), 0) FROM media_files f WHERE f.title_id = t.id)
+	       (SELECT IFNULL(SUM(f.duration), 0) FROM media_files f WHERE f.title_id = t.id),
+	       NOT EXISTS (SELECT 1 FROM media_files f WHERE f.title_id = t.id
+	                      AND f.localizacao NOT IN ('nuvem', 'baixando'))
 	  FROM titles t`
 
 // ListTitles devolve os títulos que casam com o filtro.
@@ -176,7 +181,7 @@ func scanCard(rows *sql.Rows) (TitleCard, error) {
 	var c TitleCard
 	var kind string
 	err := rows.Scan(&c.ID, &c.LibraryID, &kind, &c.Name, &c.Year, &c.Artist,
-		&c.Rating, &c.Poster, &c.Backdrop, &c.Genres, &c.MetaState, &c.Files, &c.Duration)
+		&c.Rating, &c.Poster, &c.Backdrop, &c.Genres, &c.MetaState, &c.Files, &c.Duration, &c.SoNaNuvem)
 	c.Kind = TitleKind(kind)
 	return c, err
 }
@@ -272,6 +277,8 @@ type FileInfo struct {
 	Quando int64 `json:"quando,omitempty"`
 	// TagName é o título vindo das tags do arquivo (música).
 	TagName string `json:"-"`
+	// Localizacao: local, enviando, ambos, baixando ou nuvem.
+	Localizacao string `json:"localizacao"`
 }
 
 // TitleFiles devolve os arquivos de um título já com o progresso do usuário e
@@ -283,7 +290,7 @@ func (d *DB) TitleFiles(ctx context.Context, titleID, userID int64) ([]FileInfo,
 		       IFNULL(f.track, 0), f.thumb, f.display_name,
 		       IFNULL(p.position_sec, 0), IFNULL(p.finished, 0),
 		       IFNULL(e.season, 0), IFNULL(e.episode, 0), IFNULL(e.name, ''),
-		       IFNULL(NULLIF(f.taken_at, 0), f.mtime)
+		       IFNULL(NULLIF(f.taken_at, 0), f.mtime), f.localizacao
 		  FROM media_files f
 		  LEFT JOIN progress p ON p.media_file_id = f.id AND p.user_id = ?
 		  LEFT JOIN episodes e ON e.media_file_id = f.id
@@ -310,7 +317,7 @@ func (d *DB) TitleFiles(ctx context.Context, titleID, userID int64) ([]FileInfo,
 		)
 		if err := rows.Scan(&fi.ID, &fi.RelPath, &fi.Ext, &mtype, &fi.Size, &fi.Duration,
 			&fi.Width, &fi.Height, &fi.VCodec, &fi.ACodec, &fi.Track, &fi.Thumb, &fi.TagName,
-			&fi.Position, &finished, &fi.Season, &fi.Episode, &fi.EpName, &fi.Quando); err != nil {
+			&fi.Position, &finished, &fi.Season, &fi.Episode, &fi.EpName, &fi.Quando, &fi.Localizacao); err != nil {
 			return nil, err
 		}
 		fi.Type = MediaType(mtype)
@@ -376,11 +383,12 @@ func (d *DB) FileByID(ctx context.Context, id int64) (MediaFile, error) {
 	err := d.QueryRowContext(ctx, `
 		SELECT id, library_id, title_id, path, rel_path, ext, size, mtime, media_type,
 		       IFNULL(duration, 0), IFNULL(width, 0), IFNULL(height, 0), vcodec, acodec,
-		       IFNULL(track, 0), thumb, pix_fmt, vprofile, channels, vbitrate
+		       IFNULL(track, 0), thumb, pix_fmt, vprofile, channels, vbitrate,
+		       localizacao, nuvem_key
 		  FROM media_files WHERE id = ?`, id).
 		Scan(&f.ID, &f.LibraryID, &titleID, &f.Path, &f.RelPath, &f.Ext, &f.Size, &f.MTime,
 			&mtype, &f.Duration, &f.Width, &f.Height, &f.VCodec, &f.ACodec, &f.Track, &f.Thumb,
-			&f.PixFmt, &f.VProfile, &f.Channels, &f.VBitrate)
+			&f.PixFmt, &f.VProfile, &f.Channels, &f.VBitrate, &f.Localizacao, &f.NuvemKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MediaFile{}, ErrNotFound
 	}

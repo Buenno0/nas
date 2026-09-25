@@ -35,7 +35,35 @@ type Config struct {
 	CacheGB   float64 `json:"cache_gb"`
 	ReservaGB float64 `json:"reserva_gb"`
 	Trabalhos int     `json:"trabalhos"`
+
+	// Modo de nuvem: "local" (padrão, zero AWS) ou "hibrido". É um eixo
+	// independente do acesso LAN/Tunnel.
+	Modo  string `json:"modo"`
+	Nuvem Nuvem  `json:"nuvem"`
 }
+
+// Nuvem descreve o bucket do modo híbrido. Nenhum segredo mora aqui: as
+// credenciais vêm da cadeia padrão da AWS, e Perfil costuma apontar para um
+// perfil com credential_process (o aws_signing_helper do IAM Roles Anywhere,
+// com a chave privada no Keychain).
+type Nuvem struct {
+	Regiao string `json:"regiao"`
+	Bucket string `json:"bucket"`
+	Perfil string `json:"perfil,omitempty"`
+	// Endpoint troca a AWS por qualquer API S3: MinIO nos testes, R2, B2.
+	Endpoint  string `json:"endpoint,omitempty"`
+	PathStyle bool   `json:"path_style,omitempty"`
+	// Prefixo isola o Ozymandias dentro de um bucket compartilhado.
+	Prefixo string `json:"prefixo,omitempty"`
+}
+
+// Configurada diz se há o mínimo para tentar o modo híbrido.
+func (n Nuvem) Configurada() bool { return n.Bucket != "" && n.Regiao != "" }
+
+const (
+	ModoLocal   = "local"
+	ModoHibrido = "hibrido"
+)
 
 // Default devolve a configuração usada no primeiro boot.
 func Default() Config {
@@ -47,6 +75,7 @@ func Default() Config {
 		CacheGB:   8,
 		ReservaGB: 5,
 		Trabalhos: 2,
+		Modo:      ModoLocal,
 	}
 }
 
@@ -122,6 +151,9 @@ func Load() (Config, error) {
 	}
 	if cfg.ReservaGB <= 0 {
 		cfg.ReservaGB = Default().ReservaGB
+	}
+	if cfg.Modo != ModoHibrido {
+		cfg.Modo = ModoLocal
 	}
 	if cfg.Trabalhos <= 0 || cfg.Trabalhos > 8 {
 		cfg.Trabalhos = Default().Trabalhos

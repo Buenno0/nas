@@ -24,6 +24,11 @@ type metricsSnapshot struct {
 	CacheLimite  int64 `json:"cache_limite_bytes"`
 
 	Trafego metrics.Resumo `json:"trafego"`
+
+	// Modo de nuvem e o contador do guard: no modo local ele deve crescer
+	// sempre que algo tenta falar com a AWS, e nada sai do Mac.
+	ModoNuvem       string `json:"modo_nuvem"`
+	NuvemBloqueadas int64  `json:"nuvem_bloqueadas_total"`
 }
 
 // amostraLoop é o ÚNICO chamador de Amostra no processo. O amostrador calcula a
@@ -63,14 +68,16 @@ func (s *Server) metricsSnapshot() metricsSnapshot {
 	usado, limite := s.preparador.Uso()
 
 	snap := metricsSnapshot{
-		Modo:         modo,
-		Processo:     processo,
-		DiscoLivre:   livre,
-		DiscoTotal:   total,
-		DiscoReserva: s.preparador.Reserva(),
-		CacheUsado:   usado,
-		CacheLimite:  limite,
-		Trafego:      s.coletor.Snapshot(),
+		Modo:            modo,
+		Processo:        processo,
+		DiscoLivre:      livre,
+		DiscoTotal:      total,
+		DiscoReserva:    s.preparador.Reserva(),
+		CacheUsado:      usado,
+		CacheLimite:     limite,
+		Trafego:         s.coletor.Snapshot(),
+		ModoNuvem:       string(s.nuvem.Modo()),
+		NuvemBloqueadas: s.nuvem.Bloqueadas(),
 	}
 	// startedAt só é preenchido em Serve; fora dele (testes) o uptime é zero em
 	// vez de "desde 1970".

@@ -19,7 +19,9 @@ const usage = `Ozymandias — servidor de mídia pessoal
 
 Uso:
   nas                      menu interativo (1 = local, 2 = tunnel)
-  nas serve [--local|--tunnel] [--port N]
+  nas serve [--local|--tunnel] [--port N] [--sem-nuvem]
+  nas modo [local|hibrido] modo de nuvem (local = kill switch, zero AWS)
+  nas push <arquivo> [--lib N] envia ao bucket (modo híbrido)
   nas lib add <caminho> [--kind movie|tv|music|photo]
   nas lib ls
   nas scan                 indexa os arquivos e busca metadados
@@ -60,6 +62,10 @@ func Run(args []string) int {
 		err = cmdPasswd(ctx, rest)
 	case "config":
 		err = cmdConfig(rest)
+	case "modo":
+		err = cmdModo(rest)
+	case "push":
+		err = cmdPush(ctx, rest)
 	case "status":
 		err = cmdStatus()
 	case "stop":

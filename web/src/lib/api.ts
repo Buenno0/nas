@@ -64,6 +64,8 @@ export interface TitleCard {
   files: number
   duration?: number
   meta_state: string
+  /** Nenhum arquivo do título tem cópia no Mac. */
+  so_na_nuvem?: boolean
 }
 
 export interface ContinueItem {
@@ -143,6 +145,41 @@ export interface FileInfo {
   episode_name?: string
   /** Foto: data de captura (EXIF), com o mtime do arquivo como reserva. */
   quando?: number
+  localizacao?: Localizacao
+}
+
+/** Onde o arquivo mora. "nuvem" e "baixando" não têm cópia no Mac. */
+export type Localizacao = 'local' | 'enviando' | 'ambos' | 'baixando' | 'nuvem'
+export const soNaNuvem = (l?: Localizacao) => l === 'nuvem' || l === 'baixando'
+
+export type ModoNuvem = 'local' | 'conectando' | 'hibrido'
+
+export interface EstadoNuvem {
+  modo: ModoNuvem
+  erro?: string
+  desde: string
+  /** --sem-nuvem: o híbrido está travado nesta execução. */
+  travado: boolean
+  configurada: boolean
+  suporte: boolean
+  nuvem_bloqueadas_total: number
+}
+
+export interface Upload {
+  id: number
+  library_id: number
+  key: string
+  nome: string
+  tamanho: number
+  parte_tamanho: number
+  content_type: string
+  estado: 'enviando' | 'concluido' | 'abortado'
+  created_at: number
+}
+
+export interface ParteEnviada {
+  n: number
+  etag: string
 }
 
 export type PlaybackMode = 'direct' | 'remux' | 'audio' | 'video'
@@ -167,6 +204,9 @@ export interface PlaybackPlan {
   preparo?: PreparoProgresso
   ffmpeg: boolean
   transcodificacao_ativa: boolean
+  localizacao?: Localizacao
+  /** Só na nuvem, com o modo local: existe, mas não toca. */
+  indisponivel?: boolean
 }
 
 export interface Faixa {
@@ -298,6 +338,8 @@ export interface MetricsSnapshot {
   cache_usado_bytes: number
   cache_limite_bytes: number
   trafego: TrafficSummary
+  modo_nuvem?: ModoNuvem
+  nuvem_bloqueadas_total?: number
 }
 
 export interface TitleQuery {
@@ -391,6 +433,32 @@ export const api = {
 
   metrics: () => request<MetricsSnapshot>('/api/metrics/status'),
   metricsEventsUrl: () => '/api/metrics/events',
+
+  modo: () => request<EstadoNuvem>('/api/modo'),
+  /** "local" é o kill switch: corta a nuvem na hora. */
+  setModo: (modo: 'local' | 'hibrido') =>
+    request<EstadoNuvem>('/api/modo', { method: 'PUT', body: JSON.stringify({ modo }) }),
+  modoEventsUrl: () => '/api/modo/events',
+
+  uploads: () => request<Upload[]>('/api/uploads'),
+  criarUpload: (libraryId: number, nome: string, tamanho: number, contentType: string) =>
+    request<{ upload: Upload; partes: number }>('/api/uploads', {
+      method: 'POST',
+      body: JSON.stringify({ library_id: libraryId, nome, tamanho, content_type: contentType }),
+    }),
+  urlsDoUpload: (id: number, partes: number[]) =>
+    request<{ urls: Record<string, string> }>(`/api/uploads/${id}/urls`, {
+      method: 'POST',
+      body: JSON.stringify({ partes }),
+    }),
+  partesDoUpload: (id: number) =>
+    request<{ upload: Upload; enviadas: ParteEnviada[] }>(`/api/uploads/${id}/partes`),
+  concluirUpload: (id: number, partes: ParteEnviada[]) =>
+    request<{ file_id: number }>(`/api/uploads/${id}/concluir`, {
+      method: 'POST',
+      body: JSON.stringify({ partes }),
+    }),
+  abortarUpload: (id: number) => request<void>(`/api/uploads/${id}`, { method: 'DELETE' }),
 
   settings: () => request<Settings>('/api/settings'),
   saveSettings: (patch: Partial<Record<'tmdb_key' | 'tmdb_lang' | 'scan_every', string>>) =>

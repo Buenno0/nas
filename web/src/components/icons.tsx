@@ -208,3 +208,23 @@ export const ListIcon = (p: IconProps) => (
     <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
   </Icon>
 )
+
+export const CloudIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M7 18h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.5 9.2 4.5 4.5 0 0 0 7 18Z" />
+  </Icon>
+)
+
+export const CloudOffIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 5.6A6 6 0 0 1 18.1 10a4 4 0 0 1 2.4 6.6M17 18H7a4.5 4.5 0 0 1-.9-8.9" />
+    <path d="M3 3l18 18" />
+  </Icon>
+)
+
+export const UploadIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 16V4M7 9l5-5 5 5" />
+    <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+  </Icon>
+)

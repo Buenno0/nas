@@ -40,6 +40,15 @@ func FFmpegPath() (string, error) {
 	return ffmpegPath, nil
 }
 
+type chaveVida struct{}
+
+// ComVida marca um contexto cuja geração de miniatura, mesmo solta da
+// requisição, precisa morrer junto com vida. É o elo com o kill switch: um
+// ffmpeg lendo uma URL da nuvem não sobrevive ao modo local.
+func ComVida(ctx, vida context.Context) context.Context {
+	return context.WithValue(ctx, chaveVida{}, vida)
+}
+
 // cacheName é estável por (caminho, mtime): o arquivo mudou, a imagem muda de
 // nome — e o cache do navegador não serve uma capa velha.
 func cacheName(prefix, path string, mtime int64) string {
@@ -50,6 +59,13 @@ func cacheName(prefix, path string, mtime int64) string {
 // VideoFrame extrai um quadro do vídeo como capa. Pega perto de 15% da
 // duração para escapar de tela preta e logo de abertura.
 func VideoFrame(ctx context.Context, srcPath string, mtime int64, duration float64, destDir string) (string, error) {
+	return VideoFrameDe(ctx, srcPath, srcPath, mtime, duration, destDir)
+}
+
+// VideoFrameDe separa a identidade do cache (chave) de onde ler (origem). Um
+// item da nuvem tem chave estável e origem numa URL assinada que muda a cada
+// pedido.
+func VideoFrameDe(ctx context.Context, chave, origem string, mtime int64, duration float64, destDir string) (string, error) {
 	// Cuidado com vídeos curtos: buscar além do fim faz o ffmpeg terminar sem
 	// escrever nada. O ponto sempre fica dentro do arquivo.
 	seek := 3.0
@@ -62,9 +78,9 @@ func VideoFrame(ctx context.Context, srcPath string, mtime int64, duration float
 			seek = duration * 0.5
 		}
 	}
-	return runFFmpeg(ctx, destDir, cacheName("frame", srcPath, mtime),
+	return runFFmpeg(ctx, destDir, cacheName("frame", chave, mtime),
 		"-ss", strconv.FormatFloat(seek, 'f', 2, 64),
-		"-i", srcPath,
+		"-i", origem,
 		"-frames:v", "1",
 		"-vf", "scale=500:-2",
 		"-q:v", "4",
@@ -90,13 +106,18 @@ func EmbeddedCover(ctx context.Context, srcPath string, mtime int64, destDir str
 
 // ImageThumb reduz uma foto. Também resolve HEIC, que o Chrome não abre.
 func ImageThumb(ctx context.Context, srcPath string, mtime int64, destDir string, width int) (string, error) {
+	return ImageThumbDe(ctx, srcPath, srcPath, mtime, destDir, width)
+}
+
+// ImageThumbDe é o ImageThumb com chave de cache e origem separadas.
+func ImageThumbDe(ctx context.Context, chave, origem string, mtime int64, destDir string, width int) (string, error) {
 	if width <= 0 {
 		width = 500
 	}
 	// A largura entra no nome: sem isso, a primeira miniatura gerada seria
 	// devolvida para todos os tamanhos pedidos depois.
-	return runFFmpeg(ctx, destDir, cacheName(fmt.Sprintf("thumb%d", width), srcPath, mtime),
-		"-i", srcPath,
+	return runFFmpeg(ctx, destDir, cacheName(fmt.Sprintf("thumb%d", width), chave, mtime),
+		"-i", origem,
 		"-frames:v", "1",
 		"-vf", fmt.Sprintf("scale=%d:-2", width),
 		"-q:v", "4",
@@ -159,6 +180,10 @@ func runFFmpeg(ctx context.Context, destDir, name string, args ...string) (strin
 		go func() {
 			prazo, cancelar := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 			defer cancelar()
+			// Quem lê da nuvem ainda obedece ao kill switch.
+			if vida, ok := ctx.Value(chaveVida{}).(context.Context); ok {
+				defer context.AfterFunc(vida, cancelar)()
+			}
 
 			g.nome, g.err = geraMiniatura(prazo, bin, destDir, dest, name, args)
 

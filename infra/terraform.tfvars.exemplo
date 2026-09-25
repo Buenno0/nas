@@ -1,0 +1,9 @@
+bucket       = "ozymandias-midia-SEUNOME"
+regiao       = "us-east-1"
+email_alerta = "voce@exemplo.com"
+origens_web  = ["http://localhost:8787", "http://SEU-MAC.local:8787"]
+ca_pem       = <<-EOT
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+EOT

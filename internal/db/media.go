@@ -45,6 +45,10 @@ type MediaFile struct {
 	TakenAt int64 `json:"taken_at,omitempty"`
 	// DisplayName vem das tags do arquivo (título da faixa em MP3/FLAC).
 	DisplayName string `json:"-"`
+	// Onde o arquivo mora (migration 0010): local, enviando, ambos, baixando,
+	// nuvem. NuvemKey é a chave no bucket, vazia para itens só locais.
+	Localizacao string `json:"localizacao"`
+	NuvemKey    string `json:"-"`
 }
 
 // Stamp é a assinatura usada para detectar mudanças sem reler o arquivo.
@@ -60,7 +64,8 @@ type Stamp struct {
 // indexados na biblioteca.
 func (d *DB) FileStamps(ctx context.Context, libraryID int64) (map[string]Stamp, error) {
 	rows, err := d.QueryContext(ctx,
-		`SELECT id, path, size, mtime, probed_at, title_id FROM media_files WHERE library_id = ?`, libraryID)
+		`SELECT id, path, size, mtime, probed_at, title_id FROM media_files
+		  WHERE library_id = ? AND localizacao NOT IN ('nuvem', 'baixando')`, libraryID)
 	if err != nil {
 		return nil, fmt.Errorf("lendo índice da biblioteca: %w", err)
 	}
@@ -130,6 +135,9 @@ func (d *DB) UpsertFile(ctx context.Context, f MediaFile, probed bool) (int64, e
 }
 
 // DeleteFilesByID remove do índice arquivos que sumiram do disco.
+//
+// Um arquivo que também está no bucket não sai do catálogo: ele só perde a
+// cópia local e volta a ser "na nuvem".
 func (d *DB) DeleteFilesByID(ctx context.Context, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
@@ -140,13 +148,23 @@ func (d *DB) DeleteFilesByID(ctx context.Context, ids []int64) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.PrepareContext(ctx, `DELETE FROM media_files WHERE id = ?`)
+	rebaixa, err := tx.PrepareContext(ctx,
+		`UPDATE media_files SET localizacao = 'nuvem' WHERE id = ? AND localizacao = 'ambos'`)
+	if err != nil {
+		return err
+	}
+	defer rebaixa.Close()
+	stmt, err := tx.PrepareContext(ctx,
+		`DELETE FROM media_files WHERE id = ? AND localizacao IN ('local', 'enviando')`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for _, id := range ids {
+		if _, err := rebaixa.ExecContext(ctx, id); err != nil {
+			return fmt.Errorf("rebaixando arquivo %d: %w", id, err)
+		}
 		if _, err := stmt.ExecContext(ctx, id); err != nil {
 			return fmt.Errorf("removendo arquivo %d: %w", id, err)
 		}

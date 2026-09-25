@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"nas/internal/auth"
+	"nas/internal/cloud"
 	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/media"
@@ -26,6 +27,9 @@ import (
 type Options struct {
 	SecureCookies bool // cookie só por HTTPS (tunnel)
 	TrustProxy    bool // confiar no CF-Connecting-IP vindo do loopback
+	// Nuvem é o kill switch do modo híbrido. Nil vira uma chave travada em
+	// LOCAL, que é exatamente o Ozymandias de antes do híbrido.
+	Nuvem *cloud.Chave
 }
 
 // Server agrupa as dependências dos handlers.
@@ -41,6 +45,7 @@ type Server struct {
 	opts    Options
 	scan    scanState
 	ruinas  ruinas
+	nuvem   *cloud.Chave
 
 	// preparador cuida da transcodificação sob demanda; fundo é o contexto do
 	// servidor, para um preparo sobreviver à requisição que o pediu mas morrer
@@ -71,7 +76,12 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 	if err != nil {
 		log.Printf("cache de preparo indisponível: %v", err)
 	}
+	chave := opts.Nuvem
+	if chave == nil {
+		chave = cloud.Nova(func() config.Nuvem { return config.Nuvem{} }, true)
+	}
 	return &Server{
+		nuvem:   chave,
 		cfg:     cfg,
 		db:      database,
 		auth:    auth.NewService(database),
@@ -150,6 +160,21 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/colecoes/{id}/itens/{titulo}", s.protected(s.handleItemDaColecao))
 	mux.Handle("PUT /api/colecoes/{id}/ordem", s.protected(s.handleReordenarColecao))
 	mux.Handle("GET /api/titles/{id}/colecoes", s.protected(s.handleColecoesDoTitulo))
+
+	// Modo de nuvem: ver é de todos (a interface mostra o selo), alternar é do
+	// admin. O kill switch é o PUT com "local".
+	mux.Handle("GET /api/modo", s.protected(s.handleGetModo))
+	mux.Handle("PUT /api/modo", s.adminOnly(s.handlePutModo))
+	mux.Handle("GET /api/modo/events", s.protected(s.handleModoEvents))
+
+	// Upload direto para o bucket: o navegador envia as partes ao S3 com URLs
+	// assinadas, sem passar os bytes pelo Mac.
+	mux.Handle("GET /api/uploads", s.adminOnly(s.handleUploads))
+	mux.Handle("POST /api/uploads", s.adminOnly(s.handleCriarUpload))
+	mux.Handle("POST /api/uploads/{id}/urls", s.adminOnly(s.handleURLsDoUpload))
+	mux.Handle("GET /api/uploads/{id}/partes", s.adminOnly(s.handlePartesDoUpload))
+	mux.Handle("POST /api/uploads/{id}/concluir", s.adminOnly(s.handleConcluirUpload))
+	mux.Handle("DELETE /api/uploads/{id}", s.adminOnly(s.handleAbortarUpload))
 
 	mux.Handle("GET /api/settings", s.protected(s.handleGetSettings))
 	mux.Handle("PUT /api/settings", s.adminOnly(s.handlePutSettings))

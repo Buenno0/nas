@@ -51,6 +51,10 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if db.SoNaNuvem(file.Localizacao) {
+		s.streamDaNuvem(w, r, file)
+		return
+	}
 
 	f, err := os.Open(file.Path)
 	if err != nil {
@@ -79,6 +83,23 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, filepath.Base(file.Path), info.ModTime(), f)
 }
 
+// streamDaNuvem manda o cliente ler direto do bucket: os bytes não passam pelo
+// Mac. No modo local o item existe no catálogo, mas não toca.
+func (s *Server) streamDaNuvem(w http.ResponseWriter, r *http.Request, file db.MediaFile) {
+	arm, _, ok := s.nuvem.Hibrido()
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "na nuvem, indisponível no modo local")
+		return
+	}
+	url, err := arm.URLDeLeitura(r.Context(), file.NuvemKey, ttlDeLeitura)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "não foi possível assinar a leitura: "+err.Error())
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, url, http.StatusFound)
+}
+
 // Larguras permitidas para as miniaturas. Uma lista fechada evita que alguém
 // peça mil tamanhos diferentes e encha o disco de JPEG.
 var thumbWidths = map[int]bool{320: true, 800: true, 1600: true}
@@ -104,17 +125,36 @@ func (s *Server) handleFileThumb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Item da nuvem: a chave do cache é o caminho estável, e a leitura sai de
+	// uma URL assinada. No modo local, só o que já estiver em cache aparece.
+	ctx, origem := r.Context(), file.Path
+	if db.SoNaNuvem(file.Localizacao) {
+		arm, vida, ok := s.nuvem.Hibrido()
+		if ok {
+			origem, err = arm.URLDeLeitura(ctx, file.NuvemKey, ttlDeLeitura)
+		}
+		if !ok || err != nil {
+			origem = ""
+		} else {
+			ctx = media.ComVida(ctx, vida)
+		}
+	}
+
 	var name string
 	switch file.Type {
 	case db.TypePhoto:
-		name, err = media.ImageThumb(r.Context(), file.Path, file.MTime, dir, width)
+		name, err = media.ImageThumbDe(ctx, file.Path, origem, file.MTime, dir, width)
 	case db.TypeVideo:
-		name, err = media.VideoFrame(r.Context(), file.Path, file.MTime, file.Duration, dir)
+		name, err = media.VideoFrameDe(ctx, file.Path, origem, file.MTime, file.Duration, dir)
 	default:
 		http.NotFound(w, r)
 		return
 	}
 	if err != nil {
+		if origem == "" {
+			writeError(w, http.StatusServiceUnavailable, "na nuvem, indisponível no modo local")
+			return
+		}
 		if errors.Is(err, media.ErrNoFFmpeg) {
 			writeError(w, http.StatusServiceUnavailable, "ffmpeg não instalado: sem miniaturas")
 			return

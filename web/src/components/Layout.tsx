@@ -3,11 +3,14 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Library } from '../lib/api'
 import { useTheme } from '../lib/theme'
+import { useModoAoVivo, useModoNuvem } from '../lib/nuvem'
 import { MiniPlayer } from './MiniPlayer'
 import { Mark } from './Mark'
 import {
   ActivityIcon,
   ChevronRight,
+  CloudIcon,
+  CloudOffIcon,
   FilmIcon,
   HomeIcon,
   ListIcon,
@@ -40,6 +43,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { data: libraries } = useQuery({ queryKey: ['libraries'], queryFn: api.libraries })
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.me })
   const location = useLocation()
+  useModoAoVivo()
 
   return (
     <div className="min-h-full bg-bg">
@@ -54,6 +58,29 @@ export function Layout({ children }: { children: ReactNode }) {
       <MiniPlayer />
       <MobileNav libraries={libraries ?? []} />
     </div>
+  )
+}
+
+/** Selo do modo de nuvem. Só aparece quando há nuvem para falar: num
+ *  Ozymandias sem bucket configurado, o modo local é o único que existe. */
+function SeloDoModo() {
+  const estado = useModoNuvem()
+  if (!estado || (!estado.configurada && estado.modo === 'local')) return null
+  const hibrido = estado.modo === 'hibrido'
+  const rotulo = estado.modo === 'conectando' ? 'Conectando' : hibrido ? 'Híbrido' : 'Local'
+  return (
+    <Link
+      to="/settings"
+      title={hibrido ? 'Modo híbrido: o bucket está ligado' : 'Modo local: nenhuma chamada à nuvem'}
+      className={[
+        'hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition sm:inline-flex',
+        hibrido ? 'border-accent/40 bg-accent/10 text-accent' : 'border-line bg-surface text-muted hover:text-ink',
+        estado.modo === 'conectando' ? 'animate-pulse' : '',
+      ].join(' ')}
+    >
+      {hibrido ? <CloudIcon /> : <CloudOffIcon />}
+      {rotulo}
+    </Link>
   )
 }
 
@@ -233,6 +260,8 @@ function TopBar() {
             />
           </label>
         </form>
+
+        <SeloDoModo />
 
         <button
           type="button"

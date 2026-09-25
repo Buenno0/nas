@@ -1,10 +1,13 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useScanStatus } from '../lib/useScanStatus'
 import { useTheme } from '../lib/theme'
 import { kindLabel } from '../lib/format'
-import { MoonIcon, RefreshIcon, SunIcon } from '../components/icons'
+import { CloudIcon, CloudOffIcon, MoonIcon, RefreshIcon, SunIcon, UploadIcon } from '../components/icons'
+import { chaveModo, useModoNuvem } from '../lib/nuvem'
+import { criarEnvio, enviar, PausadoPeloModo } from '../lib/upload'
+import { humanSize } from '../lib/format'
 
 export function Settings() {
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.me })
@@ -25,6 +28,8 @@ export function Settings() {
 
       {/* As seções de servidor só existem para o admin — e a API recusa
           essas rotas para os demais, então esconder aqui é só cortesia. */}
+      {admin && <NuvemCard />}
+      {admin && <UploadCard />}
       {admin && <LibrariesCard />}
       {admin && <MetadataCard />}
       <AppearanceCard />
@@ -40,6 +45,242 @@ function Card({ title, description, children }: { title: string; description?: s
       {description && <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>}
       <div className="mt-4">{children}</div>
     </section>
+  )
+}
+
+function NuvemCard() {
+  const queryClient = useQueryClient()
+  const estado = useModoNuvem()
+  const alternar = useMutation({
+    mutationFn: api.setModo,
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: chaveModo }),
+  })
+
+  const modo = estado?.modo ?? 'local'
+  const hibrido = modo === 'hibrido'
+  const bloqueio = !estado?.suporte
+    ? 'Este binário foi compilado sem suporte a nuvem.'
+    : estado.travado
+      ? 'Servidor iniciado com --sem-nuvem: o híbrido está travado nesta execução.'
+      : !estado.configurada
+        ? 'Configure o bucket no terminal: nas config set nuvem.bucket … e nuvem.regiao …'
+        : ''
+
+  return (
+    <Card
+      title="Modo de nuvem"
+      description="Local é o modo base: o Mac não faz nenhuma chamada à AWS, e itens que moram só no bucket aparecem como indisponíveis. Híbrido liga o bucket. Alternar não perde nada."
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span
+          className={[
+            'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold',
+            hibrido ? 'bg-accent/15 text-accent' : 'bg-elev text-ink',
+          ].join(' ')}
+        >
+          {hibrido ? <CloudIcon /> : <CloudOffIcon />}
+          {modo === 'conectando' ? 'Conectando…' : hibrido ? 'Híbrido' : 'Local'}
+        </span>
+
+        {hibrido || modo === 'conectando' ? (
+          <button
+            type="button"
+            onClick={() => alternar.mutate('local')}
+            className="rounded-lg bg-danger px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Cortar a nuvem agora
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => alternar.mutate('hibrido')}
+            disabled={!!bloqueio || alternar.isPending}
+            className="rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-accent-ink transition hover:opacity-90 disabled:opacity-50"
+          >
+            {alternar.isPending ? 'Conectando…' : 'Ligar o híbrido'}
+          </button>
+        )}
+      </div>
+
+      {bloqueio && !hibrido && <p className="mt-3 text-xs text-muted">{bloqueio}</p>}
+      {estado?.erro && (
+        <p role="alert" className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+          {estado.erro}
+        </p>
+      )}
+      <p className="mt-3 text-xs text-muted">
+        Chamadas à nuvem bloqueadas nesta execução:{' '}
+        <span className="font-mono text-ink">{estado?.nuvem_bloqueadas_total ?? 0}</span>
+      </p>
+    </Card>
+  )
+}
+
+interface Envio {
+  chave: string
+  arquivo: File
+  uploadId?: number
+  enviados: number
+  estado: 'enviando' | 'pausado' | 'pronto' | 'erro'
+  erro?: string
+}
+
+function UploadCard() {
+  const queryClient = useQueryClient()
+  const { data: libraries } = useQuery({ queryKey: ['libraries'], queryFn: api.libraries })
+  const estado = useModoNuvem()
+  const hibrido = estado?.modo === 'hibrido'
+  const [libId, setLibId] = useState(0)
+  const [envios, setEnvios] = useState<Envio[]>([])
+  const [arrastando, setArrastando] = useState(false)
+
+  // O uploader consulta isto a cada 200 ms: o kill switch chega pelo SSE e
+  // aborta as partes em voo.
+  const hibridoRef = useRef(hibrido)
+  hibridoRef.current = hibrido
+
+  const destino = libId || libraries?.[0]?.id || 0
+  const muda = (chave: string, patch: Partial<Envio>) =>
+    setEnvios((lista) => lista.map((e) => (e.chave === chave ? { ...e, ...patch } : e)))
+
+  const roda = async (envio: Envio) => {
+    muda(envio.chave, { estado: 'enviando', erro: undefined })
+    try {
+      let uploadId = envio.uploadId
+      let upload
+      if (uploadId === undefined) {
+        upload = await criarEnvio(envio.arquivo, destino)
+        uploadId = upload.id
+        muda(envio.chave, { uploadId })
+      } else {
+        upload = (await api.partesDoUpload(uploadId)).upload
+      }
+      await enviar(envio.arquivo, upload, () => hibridoRef.current, (p) =>
+        muda(envio.chave, { enviados: p.enviados }),
+      )
+      muda(envio.chave, { estado: 'pronto', enviados: envio.arquivo.size })
+      void queryClient.invalidateQueries()
+    } catch (e) {
+      if (e instanceof PausadoPeloModo || !hibridoRef.current) muda(envio.chave, { estado: 'pausado' })
+      else muda(envio.chave, { estado: 'erro', erro: (e as Error).message })
+    }
+  }
+
+  // Voltou o híbrido: retoma o que o kill switch pausou.
+  const enviosRef = useRef(envios)
+  enviosRef.current = envios
+  useEffect(() => {
+    if (!hibrido) return
+    for (const e of enviosRef.current) if (e.estado === 'pausado') void roda(e)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hibrido])
+
+  const adiciona = (arquivos: FileList | null) => {
+    if (!arquivos || !destino) return
+    const novos = [...arquivos].map<Envio>((arquivo) => ({
+      chave: `${arquivo.name}-${arquivo.size}-${Math.random()}`,
+      arquivo,
+      enviados: 0,
+      estado: hibridoRef.current ? 'enviando' : 'pausado',
+    }))
+    setEnvios((lista) => [...novos, ...lista])
+    if (hibridoRef.current) for (const e of novos) void roda(e)
+  }
+
+  return (
+    <Card
+      title="Enviar para a nuvem"
+      description="O navegador manda o arquivo direto ao bucket, sem passar pelo Mac. O item entra no catálogo como “na nuvem”. Se o modo voltar a local, o envio pausa e retoma sozinho quando o híbrido voltar."
+    >
+      <label className="mb-3 flex items-center gap-2 text-xs text-muted">
+        Biblioteca
+        <select
+          value={destino}
+          onChange={(e) => setLibId(Number(e.target.value))}
+          className="rounded-lg border border-line bg-bg px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+        >
+          {(libraries ?? []).map((lib) => (
+            <option key={lib.id} value={lib.id}>
+              {lib.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label
+        onDragOver={(e) => {
+          e.preventDefault()
+          setArrastando(true)
+        }}
+        onDragLeave={() => setArrastando(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setArrastando(false)
+          if (hibrido) adiciona(e.dataTransfer.files)
+        }}
+        className={[
+          'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center text-sm transition',
+          hibrido ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
+          arrastando ? 'border-accent bg-accent/10' : 'border-line hover:border-accent/60',
+        ].join(' ')}
+      >
+        <UploadIcon className="text-accent" width="1.75em" height="1.75em" />
+        <span className="font-medium">
+          {hibrido ? 'Solte arquivos aqui ou clique para escolher' : 'Ligue o híbrido para enviar'}
+        </span>
+        <span className="text-xs text-muted">Filmes, episódios, músicas e fotos</span>
+        <input
+          type="file"
+          multiple
+          disabled={!hibrido || !destino}
+          className="sr-only"
+          onChange={(e) => {
+            adiciona(e.target.files)
+            e.target.value = ''
+          }}
+        />
+      </label>
+
+      {envios.length > 0 && (
+        <ul className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line">
+          {envios.map((e) => {
+            const pct = e.arquivo.size > 0 ? Math.round((e.enviados / e.arquivo.size) * 100) : 0
+            return (
+              <li key={e.chave} className="px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="line-clamp-1 font-medium">{e.arquivo.name}</span>
+                  <span
+                    className={[
+                      'shrink-0 text-xs',
+                      e.estado === 'erro' ? 'text-danger' : e.estado === 'pronto' ? 'text-ok' : 'text-muted',
+                    ].join(' ')}
+                  >
+                    {e.estado === 'pronto'
+                      ? 'na nuvem'
+                      : e.estado === 'pausado'
+                        ? `pausado · ${pct}%`
+                        : e.estado === 'erro'
+                          ? 'falhou'
+                          : `${pct}% de ${humanSize(e.arquivo.size)}`}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1 overflow-hidden rounded bg-elev">
+                  <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
+                </div>
+                {e.erro && (
+                  <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-danger">
+                    <span>{e.erro}</span>
+                    <button type="button" onClick={() => void roda(e)} className="underline">
+                      tentar de novo
+                    </button>
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
   )
 }
 
