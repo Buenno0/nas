@@ -127,6 +127,7 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 		// Substituído pelo contexto real em Serve; até lá, nada roda.
 		fundo: context.Background(),
 	}
+	motor.AoImportar = srv.capaDoUpload
 	return srv
 }
 

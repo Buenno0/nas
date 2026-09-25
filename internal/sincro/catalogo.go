@@ -237,5 +237,9 @@ func (m *Motor) importarChave(ctx context.Context, key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return scan.New(m.db).IndexarNuvem(ctx, lib, key, rel, obj.Tamanho, "")
+	id, err := scan.New(m.db).IndexarNuvem(ctx, lib, key, rel, obj.Tamanho, "")
+	if err == nil {
+		m.importou(id)
+	}
+	return id, err
 }

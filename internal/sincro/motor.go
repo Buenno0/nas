@@ -58,6 +58,11 @@ type Motor struct {
 	// novo ao terminar, em vez de o pedido se perder.
 	pendente bool
 	erro     string
+
+	// AoImportar é avisado quando um item do bucket entra no catálogo por
+	// aqui (upload feito pela outra ponta): o servidor busca a capa na hora,
+	// em vez de esperar o próximo scan de metadados.
+	AoImportar func(fileID int64)
 }
 
 type trabalho struct {
@@ -623,8 +628,10 @@ func (m *Motor) importarDoBucket(ctx context.Context, arm cloud.Armazenamento) e
 		if err != nil {
 			return err
 		}
-		if _, err := sc.IndexarNuvem(ctx, lib, o.Key, rel, o.Tamanho, leitura); err != nil {
+		if id, err := sc.IndexarNuvem(ctx, lib, o.Key, rel, o.Tamanho, leitura); err != nil {
 			log.Printf("importando %s: %v", o.Key, err)
+		} else {
+			m.importou(id)
 		}
 		return nil
 	})
@@ -632,6 +639,12 @@ func (m *Motor) importarDoBucket(ctx context.Context, arm cloud.Armazenamento) e
 		return err // listagem pela metade: não dá para concluir que algo sumiu
 	}
 	return m.esquecerSumidos(ctx, arm, vistas)
+}
+
+func (m *Motor) importou(fileID int64) {
+	if m.AoImportar != nil && fileID != 0 {
+		m.AoImportar(fileID)
+	}
 }
 
 // esquecerSumidos trata o que foi apagado do bucket por fora (console, CLI):

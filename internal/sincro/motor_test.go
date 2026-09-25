@@ -479,7 +479,9 @@ func TestApagadoPorForaDoBucket(t *testing.T) {
 	a.db.MarcaNaNuvem(ctx, fica.ID, db.LocalNuvem, "bibliotecas/1/c/Espelho (1975).mkv")
 	grava("bibliotecas/1/c/Espelho (1975).mkv") // só este continua no bucket
 
-	a.motor.Reconciliar(ctx)
+	// Direto, sem a trava: a reconciliação de fundo (ao entrar no híbrido)
+	// pode estar rodando e adiaria esta.
+	a.motor.reconciliarUmaVez(ctx)
 
 	if _, err := a.db.FileByID(ctx, soNuvem.ID); err == nil {
 		t.Fatal("item só da nuvem apagado do bucket continuou no catálogo")
