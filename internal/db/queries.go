@@ -284,6 +284,10 @@ type FileInfo struct {
 	TagName string `json:"-"`
 	// Localizacao: local, enviando, ambos, baixando ou nuvem.
 	Localizacao string `json:"localizacao"`
+	// PreparoNuvem: "preparando" enquanto o worker gera a versão compatível,
+	// "pronto" quando ela existe, "falhou" se o worker desistiu. Vazio quando
+	// não se aplica (item só do Mac, ou que toca direto em qualquer lugar).
+	PreparoNuvem string `json:"preparo_nuvem,omitempty"`
 }
 
 // TitleFiles devolve os arquivos de um título já com o progresso do usuário e

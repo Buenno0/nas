@@ -275,6 +275,7 @@ func (m *Motor) enviar(ctx context.Context, arm cloud.Armazenamento, f db.MediaF
 	if err := m.db.MarcaNaNuvem(ctx, f.ID, db.LocalAmbos, u.Key); err != nil {
 		return err
 	}
+	m.ChegouNaNuvem(ctx, f.ID)
 	return m.db.MudaCaminho(ctx, f.ID, f.Path, db.LocalAmbos, strings.Trim(obj.ETag, `"`), f.MTime)
 }
 

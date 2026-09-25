@@ -115,6 +115,13 @@ resource "aws_iam_role_policy" "mac" {
         Resource = aws_budgets_budget.mensal.arn
       },
       {
+        # Acordar o worker quando um arquivo chega, sem esperar o autoscaling.
+        Sid      = "AcordarWorker"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeServices", "ecs:UpdateService"]
+        Resource = "arn:aws:ecs:${var.regiao}:${data.aws_caller_identity.atual.account_id}:service/${aws_ecs_cluster.ozymandias.name}/ozymandias-worker"
+      },
+      {
         Sid      = "ChaveDaCDN"
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]

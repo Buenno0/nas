@@ -7,6 +7,7 @@ import (
 	"log"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"nas/internal/cloud"
@@ -63,6 +64,36 @@ func (m *Motor) PedirProcessamento(ctx context.Context, fileID int64) error {
 	}
 	m.db.Anota(ctx, "job.pedido", 0, fileID, filepath.Base(f.RelPath), map[string]any{"key": f.NuvemKey})
 	return m.db.MarcaProcessamento(ctx, fileID, "pedido", "")
+}
+
+// ChegouNaNuvem é chamado quando um arquivo acaba de chegar ao bucket. O
+// evento do S3 já pôs o job na fila; aqui o pedido fica registrado (a página
+// do título mostra "preparando") e o worker é acordado na hora, sem esperar o
+// autoscaling notar a fila.
+func (m *Motor) ChegouNaNuvem(ctx context.Context, fileID int64) {
+	cfg := m.cfg()
+	if cfg.FilaJobs == "" || fileID == 0 {
+		return
+	}
+	_ = m.db.MarcaProcessamento(ctx, fileID, "pedido", "")
+	arm, nctx, cancel, ok := m.chave.Vincular(ctx)
+	if !ok {
+		return
+	}
+	defer cancel()
+	ac, ok := arm.(cloud.Acordador)
+	if !ok {
+		return
+	}
+	cluster, servico := "ozymandias", "ozymandias-worker"
+	if c, s, ok := strings.Cut(cfg.Worker, "/"); ok {
+		cluster, servico = c, s
+	}
+	if err := ac.AcordarWorker(nctx, cluster, servico); err != nil {
+		log.Printf("acordando o worker: %v", err)
+		return
+	}
+	m.db.Anota(ctx, "job.acordou", 0, fileID, "", map[string]any{"servico": cluster + "/" + servico})
 }
 
 // consumirCatalogo lê a assinatura do Mac no tópico catalogo enquanto o

@@ -172,6 +172,8 @@ export interface FileInfo {
   /** Foto: data de captura (EXIF), com o mtime do arquivo como reserva. */
   quando?: number
   localizacao?: Localizacao
+  /** O worker gerando a versão que toca em qualquer navegador. */
+  preparo_nuvem?: 'preparando' | 'pronto' | 'falhou'
 }
 
 /** Onde o arquivo mora. "nuvem" e "baixando" não têm cópia no Mac. */

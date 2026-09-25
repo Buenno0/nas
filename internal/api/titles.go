@@ -1,15 +1,19 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"nas/internal/auth"
 	"nas/internal/db"
+	"nas/internal/media"
+	"nas/internal/sincro"
 )
 
 // posterURL e thumbURL traduzem o nome do arquivo em cache para uma URL que o
@@ -241,6 +245,7 @@ func (s *Server) handleTitle(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range files {
 		files[i].Thumb = thumbURL(files[i].Thumb)
+		files[i].PreparoNuvem = s.preparoNaNuvem(ctx, files[i])
 	}
 
 	fav, err := s.db.IsFavorite(ctx, user.ID, id)
@@ -369,3 +374,33 @@ func atoiDefault(s string, def int) int {
 	}
 	return n
 }
+
+// preparoNaNuvem diz se o worker está gerando (ou já gerou) a versão que
+// toca em qualquer navegador, para a página do título avisar antes do play.
+func (s *Server) preparoNaNuvem(ctx context.Context, f db.FileInfo) string {
+	if f.Localizacao != db.LocalNuvem && f.Localizacao != db.LocalAmbos {
+		return ""
+	}
+	if f.Type != db.TypeVideo {
+		return ""
+	}
+	if k, err := s.db.DerivadoDe(ctx, f.ID, "compat", 0); err == nil && k != "" {
+		return "pronto"
+	}
+	estado, _, quando := s.db.ProcessamentoDesde(ctx, f.ID)
+	switch {
+	case estado == "falhou":
+		return "falhou"
+	case estado == "pedido" && time.Since(quando) < sincro.EsperaPeloWorker:
+		// Sem probe ainda (acabou de chegar): o worker é quem vai dizer.
+		if f.ACodec == "" {
+			return "preparando"
+		}
+		plano := media.DecideWithSize(f.Ext, f.VCodec, "", "", f.ACodec, f.Width, f.Height, false, media.Caps{})
+		if plano.Mode != media.ModeDirect {
+			return "preparando"
+		}
+	}
+	return ""
+}
+

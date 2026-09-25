@@ -277,6 +277,7 @@ func (s *Server) handleConcluirUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.capaDoUpload(fileID)
+	s.sincro.ChegouNaNuvem(ctx, fileID)
 	writeJSON(w, http.StatusOK, map[string]any{"file_id": fileID})
 }
 

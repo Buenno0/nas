@@ -71,6 +71,10 @@ type Nuvem struct {
 	FilaEventos string `json:"fila_eventos,omitempty"`
 	Topico      string `json:"topico_catalogo,omitempty"`
 
+	// Worker é o serviço ECS dos workers, "cluster/servico". Vazio =
+	// "ozymandias/ozymandias-worker", o que o OpenTofu cria.
+	Worker string `json:"worker,omitempty"`
+
 	// Orcamento é o nome do AWS Budget que o painel de custo compara com o
 	// gasto. Vazio = "ozymandias-mensal", o que o OpenTofu cria.
 	Orcamento string `json:"orcamento,omitempty"`

@@ -32,6 +32,7 @@ func nuvemDoAmbiente() config.Nuvem {
 		FilaJobs:     os.Getenv("NAS_FILA_JOBS"),
 		FilaEventos:  os.Getenv("NAS_FILA_EVENTOS"),
 		Topico:       os.Getenv("NAS_TOPICO_CATALOGO"),
+		Worker:       os.Getenv("NAS_WORKER"),
 	}
 }
 

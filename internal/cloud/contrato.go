@@ -136,3 +136,9 @@ func JobsDaMensagem(corpo []byte) ([]Job, error) {
 	}
 	return []Job{j}, nil
 }
+
+// Acordador liga o serviço de workers na hora, sem esperar o autoscaling
+// notar a fila (1 a 3 min). Opcional no adapter.
+type Acordador interface {
+	AcordarWorker(ctx context.Context, cluster, servico string) error
+}

@@ -156,3 +156,27 @@ func TestItemDaNuvemSemWorker(t *testing.T) {
 		t.Fatalf("pedido expirado ainda espera o worker: %+v", pb.Preparo)
 	}
 }
+
+// A página do título avisa o preparo antes do play: "preparando" enquanto o
+// worker trabalha, "pronto" quando a versão compatível existe.
+func TestTituloAvisaOPreparoDaNuvem(t *testing.T) {
+	srv, _, _, f := preparaHibrido(t, energia.Estado{})
+	ctx := context.Background()
+	info := db.FileInfo{ID: f.ID, Ext: f.Ext, Type: db.TypeVideo, VCodec: f.VCodec, ACodec: "eac3", Localizacao: db.LocalAmbos}
+
+	if got := srv.preparoNaNuvem(ctx, info); got != "" {
+		t.Fatalf("sem pedido: %q", got)
+	}
+	srv.db.MarcaProcessamento(ctx, f.ID, "pedido", "")
+	if got := srv.preparoNaNuvem(ctx, info); got != "preparando" {
+		t.Fatalf("com pedido: %q", got)
+	}
+	srv.db.GravaDerivados(ctx, f.ID, []db.Derivado{{Tipo: "compat", Key: "derivados/x/compat.mp4"}})
+	if got := srv.preparoNaNuvem(ctx, info); got != "pronto" {
+		t.Fatalf("com derivado: %q", got)
+	}
+	info.Localizacao = db.LocalLocal
+	if got := srv.preparoNaNuvem(ctx, info); got != "" {
+		t.Fatalf("item só do Mac: %q", got)
+	}
+}

@@ -48,7 +48,7 @@ export function ListaDeEnvios({
                 {e.estado === 'pronto'
                   ? e.doMac
                     ? 'no Mac e na nuvem'
-                    : 'na nuvem'
+                    : 'na nuvem · o worker processa'
                   : e.estado === 'pausado'
                     ? `pausado · ${pct}%`
                     : e.estado === 'erro'

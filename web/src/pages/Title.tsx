@@ -33,7 +33,10 @@ export function Title() {
       const emTransito =
         arquivos.some((f) => f.localizacao === 'enviando' || f.localizacao === 'baixando') ||
         (sinc?.tarefas ?? []).some((t) => ids.has(t.file_id) && t.estado !== 'erro')
-      return emTransito ? 2000 : false
+      if (emTransito) return 2000
+      // O worker leva minutos: perguntar de 10 em 10 s basta para o aviso
+      // virar "pronto para tocar" sem F5.
+      return arquivos.some((f) => f.preparo_nuvem === 'preparando') ? 10000 : false
     },
   })
 
@@ -457,8 +460,17 @@ function FileList({ files }: { files: FileInfo[] }) {
                   ]
                     .filter(Boolean)
                     .join(' · ')}
-                  {file.media_type === 'video' && !playsInBrowser(file) && (
-                    <span className="ml-1.5 text-warn">· não toca no navegador</span>
+                  {file.preparo_nuvem === 'preparando' ? (
+                    <span className="ml-1.5 inline-flex items-center gap-1 text-accent">
+                      · <NuvemIcon estado="processando" className="h-3.5 w-3.5" /> preparando para todos os aparelhos
+                    </span>
+                  ) : file.preparo_nuvem === 'pronto' ? (
+                    <span className="ml-1.5 text-ok">· pronto para tocar em qualquer aparelho</span>
+                  ) : file.preparo_nuvem === 'falhou' ? (
+                    <span className="ml-1.5 text-danger">· o worker não conseguiu preparar</span>
+                  ) : (
+                    file.media_type === 'video' &&
+                    !playsInBrowser(file) && <span className="ml-1.5 text-warn">· não toca no navegador</span>
                   )}
                 </p>
               </div>
