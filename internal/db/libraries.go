@@ -54,6 +54,8 @@ type Library struct {
 	Enabled   bool       `json:"enabled"`
 	CreatedAt time.Time  `json:"created_at"`
 	ScannedAt *time.Time `json:"scanned_at,omitempty"`
+	// Espelhada (migration 0011): no híbrido, tudo aqui ganha cópia na nuvem.
+	Espelhada bool `json:"espelhada"`
 }
 
 func (d *DB) AddLibrary(ctx context.Context, name, path string, kind Kind) (Library, error) {
@@ -76,7 +78,7 @@ func (d *DB) AddLibrary(ctx context.Context, name, path string, kind Kind) (Libr
 
 func (d *DB) Libraries(ctx context.Context) ([]Library, error) {
 	rows, err := d.QueryContext(ctx,
-		`SELECT id, name, path, kind, enabled, created_at, scanned_at
+		`SELECT id, name, path, kind, enabled, created_at, scanned_at, espelhada
 		   FROM libraries ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listando bibliotecas: %w", err)
@@ -96,7 +98,7 @@ func (d *DB) Libraries(ctx context.Context) ([]Library, error) {
 
 func (d *DB) Library(ctx context.Context, id int64) (Library, error) {
 	row := d.QueryRowContext(ctx,
-		`SELECT id, name, path, kind, enabled, created_at, scanned_at
+		`SELECT id, name, path, kind, enabled, created_at, scanned_at, espelhada
 		   FROM libraries WHERE id = ?`, id)
 	lib, err := scanLibrary(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -135,12 +137,14 @@ func scanLibrary(s scanner) (Library, error) {
 		enabled   int
 		createdAt int64
 		scannedAt sql.NullInt64
+		espelhada int
 	)
-	if err := s.Scan(&lib.ID, &lib.Name, &lib.Path, &kind, &enabled, &createdAt, &scannedAt); err != nil {
+	if err := s.Scan(&lib.ID, &lib.Name, &lib.Path, &kind, &enabled, &createdAt, &scannedAt, &espelhada); err != nil {
 		return Library{}, err
 	}
 	lib.Kind = Kind(kind)
 	lib.Enabled = enabled != 0
+	lib.Espelhada = espelhada != 0
 	lib.CreatedAt = time.Unix(createdAt, 0)
 	if scannedAt.Valid {
 		t := time.Unix(scannedAt.Int64, 0)

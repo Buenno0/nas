@@ -22,6 +22,16 @@ type Parte struct {
 	ETag   string `json:"etag"`
 }
 
+// Objeto é o que o bucket diz de uma chave. TamanhoParte é zero para objetos
+// enviados num PUT único; com ele e o ETag dá para conferir uma cópia local
+// sem baixar nada (ver ETagLocal).
+type Objeto struct {
+	Key          string
+	Tamanho      int64
+	ETag         string
+	TamanhoParte int64
+}
+
 // Armazenamento é o bucket, visto pelo app. Qualquer API S3 serve.
 type Armazenamento interface {
 	// Verificar confirma que credencial e bucket respondem. É o que impede o
@@ -29,6 +39,18 @@ type Armazenamento interface {
 	Verificar(ctx context.Context) error
 	// Tamanho devolve o tamanho do objeto, ou ErrNaoExiste.
 	Tamanho(ctx context.Context, key string) (int64, error)
+
+	// Info devolve tamanho, ETag e tamanho de parte, ou ErrNaoExiste.
+	Info(ctx context.Context, key string) (Objeto, error)
+	// Listar percorre as chaves sob o prefixo (sem o prefixo global do bucket).
+	Listar(ctx context.Context, prefixo string, fn func(Objeto) error) error
+	// Baixar lê o objeto a partir do byte desde (Range), para retomar.
+	Baixar(ctx context.Context, key string, desde int64) (io.ReadCloser, error)
+	// Gravar é o PUT simples dos objetos pequenos (journal de eventos).
+	Gravar(ctx context.Context, key string, corpo []byte, contentType string) error
+	// Apagar remove o objeto. Com versioning no bucket, a versão anterior
+	// ainda fica recuperável pelo lifecycle.
+	Apagar(ctx context.Context, key string) error
 
 	// URLDeLeitura assina um GET: o cliente lê direto do bucket, sem passar
 	// pelo Mac. Assinar é só cálculo, não abre conexão.

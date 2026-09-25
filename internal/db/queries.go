@@ -497,10 +497,16 @@ func (d *DB) SaveProgress(ctx context.Context, userID, fileID int64, position, d
 	if err != nil {
 		return fmt.Errorf("salvando progresso: %w", err)
 	}
+	d.RegistraEvento(ctx, "progresso.atualizado", map[string]any{
+		"user_id": userID, "file_id": fileID, "posicao": position, "duracao": duration,
+	})
 	return nil
 }
 
 func (d *DB) SetFavorite(ctx context.Context, userID, titleID int64, on bool) error {
+	d.RegistraEvento(ctx, "favorito.alterado", map[string]any{
+		"user_id": userID, "title_id": titleID, "favorito": on,
+	})
 	if !on {
 		_, err := d.ExecContext(ctx, `DELETE FROM favorites WHERE user_id = ? AND title_id = ?`, userID, titleID)
 		return err

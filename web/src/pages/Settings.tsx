@@ -30,6 +30,7 @@ export function Settings() {
           essas rotas para os demais, então esconder aqui é só cortesia. */}
       {admin && <NuvemCard />}
       {admin && <UploadCard />}
+      {admin && <SincronizacaoCard />}
       {admin && <LibrariesCard />}
       {admin && <MetadataCard />}
       <AppearanceCard />
@@ -284,9 +285,98 @@ function UploadCard() {
   )
 }
 
+const rotuloDaTarefa = { enviar: 'enviando', fixar: 'baixando', liberar: 'liberando', remover: 'removendo' }
+
+function SincronizacaoCard() {
+  const queryClient = useQueryClient()
+  const nuvem = useModoNuvem()
+  const { data } = useQuery({
+    queryKey: ['sincronizacao'],
+    queryFn: api.sincronizacao,
+    enabled: !!nuvem?.configurada,
+    // Só pergunta rápido enquanto há trabalho; parado, o painel é estático.
+    refetchInterval: (q) =>
+      q.state.data?.reconciliando || q.state.data?.tarefas.some((t) => t.estado !== 'erro') ? 1500 : 15000,
+  })
+  const reconciliar = useMutation({
+    mutationFn: api.reconciliar,
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['sincronizacao'] }),
+  })
+  if (!nuvem?.configurada) return null
+  const hibrido = nuvem.modo === 'hibrido'
+
+  return (
+    <Card
+      title="Sincronização"
+      description="Ao entrar no híbrido, o servidor manda para o bucket o que mudou no modo local, traz ao catálogo o que está no bucket e não aparece aqui, e retoma envios e downloads interrompidos. Repete a cada 15 minutos."
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => reconciliar.mutate()}
+          disabled={!hibrido || data?.reconciliando || reconciliar.isPending}
+          className="inline-flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium transition hover:bg-elev disabled:opacity-50"
+        >
+          <RefreshIcon className={data?.reconciliando ? 'animate-spin' : undefined} />
+          {data?.reconciliando ? 'Sincronizando…' : 'Sincronizar agora'}
+        </button>
+        <p className="text-xs text-muted">
+          {data?.eventos_pendentes
+            ? `${data.eventos_pendentes} mudanças esperando o híbrido · `
+            : ''}
+          {data?.ultima_reconciliacao
+            ? `última: ${new Date(data.ultima_reconciliacao).toLocaleString('pt-BR')}`
+            : 'nunca sincronizado'}
+        </p>
+      </div>
+
+      {data?.erro && (
+        <p className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+          {data.erro}
+        </p>
+      )}
+
+      {data && data.tarefas.length > 0 && (
+        <ul className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line">
+          {data.tarefas.map((t) => {
+            const pct = t.total > 0 ? Math.round((t.feitos / t.total) * 100) : 0
+            return (
+              <li key={`${t.tipo}-${t.file_id}`} className="px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="line-clamp-1 font-medium">{t.nome}</span>
+                  <span className={`shrink-0 text-xs ${t.estado === 'erro' ? 'text-danger' : 'text-muted'}`}>
+                    {t.estado === 'erro'
+                      ? 'falhou'
+                      : t.estado === 'pausado'
+                        ? 'pausado'
+                        : t.estado === 'fila'
+                          ? 'na fila'
+                          : `${rotuloDaTarefa[t.tipo]} ${t.total ? `${pct}% de ${humanSize(t.total)}` : ''}`}
+                  </span>
+                </div>
+                {t.total > 0 && t.estado !== 'erro' && (
+                  <div className="mt-1.5 h-1 overflow-hidden rounded bg-elev">
+                    <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+                {t.erro && <p className="mt-1 text-xs text-danger">{t.erro}</p>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
 function LibrariesCard() {
   const queryClient = useQueryClient()
   const { data: libraries } = useQuery({ queryKey: ['libraries'], queryFn: api.libraries })
+  const nuvem = useModoNuvem()
+  const espelho = useMutation({
+    mutationFn: ({ id, on }: { id: number; on: boolean }) => api.setEspelhada(id, on),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['libraries'] }),
+  })
 
   const status = useScanStatus()
 
@@ -308,9 +398,26 @@ function LibrariesCard() {
               <p className="text-sm font-medium">{lib.name}</p>
               {lib.path && <p className="line-clamp-1 text-xs text-muted">{lib.path}</p>}
             </div>
-            <span className="shrink-0 rounded-md bg-elev px-2 py-0.5 text-[11px] text-muted">
-              {kindLabel[lib.kind] ?? lib.kind}
-            </span>
+            <div className="flex shrink-0 items-center gap-3">
+              {nuvem?.configurada && (
+                <label
+                  className="flex items-center gap-1.5 text-[11px] text-muted"
+                  title="No híbrido, todo arquivo desta biblioteca ganha uma cópia na nuvem"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!lib.espelhada}
+                    disabled={espelho.isPending}
+                    onChange={(e) => espelho.mutate({ id: lib.id, on: e.target.checked })}
+                    className="accent-[var(--color-accent)]"
+                  />
+                  espelhar
+                </label>
+              )}
+              <span className="rounded-md bg-elev px-2 py-0.5 text-[11px] text-muted">
+                {kindLabel[lib.kind] ?? lib.kind}
+              </span>
+            </div>
           </li>
         ))}
         {(libraries ?? []).length === 0 && (

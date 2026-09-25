@@ -72,6 +72,19 @@ func TestS3MultipartDePontaAPonta(t *testing.T) {
 		t.Fatalf("tamanho = %d, %v", n, err)
 	}
 
+	// O ETag recalculado sobre a cópia local precisa bater com o do bucket:
+	// é a prova que "liberar espaço" usa antes de apagar qualquer coisa.
+	obj, err := arm.Info(ctx, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir() + "/copia.bin"
+	os.WriteFile(tmp, dados, 0o644)
+	local, err := cloud.ETagLocal(tmp, obj.TamanhoParte)
+	if err != nil || !cloud.MesmoConteudo(local, obj.ETag) {
+		t.Fatalf("ETag local %q ≠ bucket %q (parte %d): %v", local, obj.ETag, obj.TamanhoParte, err)
+	}
+
 	leitura, err := arm.URLDeLeitura(ctx, key, time.Minute)
 	if err != nil {
 		t.Fatal(err)

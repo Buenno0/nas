@@ -48,6 +48,28 @@ export interface Library {
   kind: LibraryKind
   enabled: boolean
   scanned_at?: string
+  /** No híbrido, todo arquivo local dela ganha cópia na nuvem. */
+  espelhada?: boolean
+}
+
+export type AcaoDeNuvem = 'enviar' | 'fixar' | 'liberar' | 'remover'
+
+export interface TarefaDeSincronizacao {
+  file_id: number
+  tipo: AcaoDeNuvem
+  nome: string
+  feitos: number
+  total: number
+  estado: 'fila' | 'trabalhando' | 'pausado' | 'erro'
+  erro?: string
+}
+
+export interface EstadoSincronizacao {
+  tarefas: TarefaDeSincronizacao[]
+  eventos_pendentes: number
+  ultima_reconciliacao?: string
+  reconciliando: boolean
+  erro?: string
 }
 
 export interface TitleCard {
@@ -439,6 +461,16 @@ export const api = {
   setModo: (modo: 'local' | 'hibrido') =>
     request<EstadoNuvem>('/api/modo', { method: 'PUT', body: JSON.stringify({ modo }) }),
   modoEventsUrl: () => '/api/modo/events',
+
+  sincronizacao: () => request<EstadoSincronizacao>('/api/sincronizacao'),
+  reconciliar: () => request<{ iniciado: boolean }>('/api/sincronizacao', { method: 'POST' }),
+  acaoDeNuvem: (fileId: number, acao: AcaoDeNuvem) =>
+    request<{ na_fila: boolean }>(`/api/files/${fileId}/nuvem/${acao}`, { method: 'POST' }),
+  setEspelhada: (libId: number, espelhada: boolean) =>
+    request<{ espelhada: boolean }>(`/api/libraries/${libId}/espelhada`, {
+      method: 'PUT',
+      body: JSON.stringify({ espelhada }),
+    }),
 
   uploads: () => request<Upload[]>('/api/uploads'),
   criarUpload: (libraryId: number, nome: string, tamanho: number, contentType: string) =>

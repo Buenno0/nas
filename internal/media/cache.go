@@ -158,3 +158,7 @@ func (p *Preparador) Disco() (livre, total int64) {
 
 // Reserva é o espaço livre que o cache nunca consome.
 func (p *Preparador) Reserva() int64 { return p.reservado }
+
+// EspacoLivre é o espaço disponível no volume de dir, para quem precisa
+// decidir se cabe um arquivo antes de baixá-lo.
+func EspacoLivre(dir string) (int64, error) { return espacoLivre(dir) }

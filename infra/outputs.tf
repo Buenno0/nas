@@ -17,6 +17,9 @@ output "configurar_nas" {
     nas config set nuvem.bucket ${aws_s3_bucket.midia.bucket}
     nas config set nuvem.regiao ${var.regiao}
     nas config set nuvem.perfil ozymandias
+    nas config set nuvem.cdn_dominio ${aws_cloudfront_distribution.midia.domain_name}
+    nas config set nuvem.cdn_chave_id ${aws_cloudfront_public_key.cdn.id}
+    nas config set nuvem.cdn_parametro ${aws_ssm_parameter.chave_cdn.name}
     nas modo hibrido
   EOT
 }

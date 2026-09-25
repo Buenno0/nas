@@ -2,69 +2,26 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"path"
 	"sort"
-	"strings"
 	"time"
 
 	"nas/internal/auth"
 	"nas/internal/cloud"
 	"nas/internal/db"
 	"nas/internal/scan"
+	"nas/internal/sincro"
 )
 
 const (
-	// O S3 aceita no máximo 10 000 partes, de 5 MiB a 5 GiB cada. 16 MiB dá
-	// arquivos de até ~156 GiB com a parte mínima; acima disso a parte cresce.
-	parteMinima      = 16 << 20
-	maxPartes        = 9000
-	maxTamanho       = 5 << 40
 	ttlDaParte       = time.Hour
 	ttlDeLeitura     = time.Hour
 	maxURLsPorPedido = 100
+	maxTamanho       = 5 << 40
 )
-
-// TamanhoDaParte escolhe a parte para caber no limite de partes do S3.
-func TamanhoDaParte(total int64) int64 {
-	p := int64(parteMinima)
-	if n := (total + maxPartes - 1) / maxPartes; n > p {
-		// Arredonda para MiB: o navegador fatia melhor em números redondos.
-		p = (n + (1 << 20) - 1) &^ ((1 << 20) - 1)
-	}
-	return p
-}
-
-// ChaveDoUpload monta a chave no bucket. O sufixo aleatório impede que dois
-// envios com o mesmo nome se sobrescrevam.
-func ChaveDoUpload(libraryID int64, rel string) (string, error) {
-	limpo, err := relSeguro(rel)
-	if err != nil {
-		return "", err
-	}
-	var b [6]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("bibliotecas/%d/%s/%s", libraryID, hex.EncodeToString(b[:]), limpo), nil
-}
-
-// relSeguro aceita "Série/Temporada 1/ep.mkv", recusa quem tenta subir de
-// diretório ou mandar caminho absoluto.
-func relSeguro(rel string) (string, error) {
-	rel = strings.ReplaceAll(strings.TrimSpace(rel), `\`, "/")
-	limpo := path.Clean("/" + rel)[1:]
-	if limpo == "" || limpo == "." || strings.Contains(rel, "..") {
-		return "", errors.New("nome de arquivo inválido")
-	}
-	return limpo, nil
-}
 
 // nuvemOu503 devolve o bucket, ou responde que o modo é local.
 func (s *Server) nuvemOu503(w http.ResponseWriter) (cloud.Armazenamento, context.Context, bool) {
@@ -116,7 +73,7 @@ func (s *Server) handleCriarUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	key, err := ChaveDoUpload(lib.ID, body.Nome)
+	key, err := sincro.ChaveDoUpload(lib.ID, body.Nome)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -132,7 +89,7 @@ func (s *Server) handleCriarUpload(w http.ResponseWriter, r *http.Request) {
 
 	u := db.Upload{
 		LibraryID: lib.ID, Key: key, UploadID: uploadID, Nome: body.Nome,
-		Tamanho: body.Tamanho, ParteTamanho: TamanhoDaParte(body.Tamanho),
+		Tamanho: body.Tamanho, ParteTamanho: sincro.TamanhoDaParte(body.Tamanho),
 		ContentType: body.ContentType, CreatedAt: time.Now().Unix(),
 	}
 	if user, ok := auth.UserFrom(r.Context()); ok {

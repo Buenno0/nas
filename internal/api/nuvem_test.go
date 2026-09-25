@@ -9,6 +9,7 @@ import (
 
 	"nas/internal/db"
 	"nas/internal/scan"
+	"nas/internal/sincro"
 )
 
 // Um item só da nuvem, no modo local: existe no catálogo, não toca, e nada
@@ -92,12 +93,12 @@ func TestLocalSumidoComCopiaNaNuvemViraNuvem(t *testing.T) {
 
 func TestTamanhoDaParteCabeNoLimite(t *testing.T) {
 	for _, total := range []int64{1, 100 << 20, 200 << 30, 5 << 40} {
-		p := TamanhoDaParte(total)
+		p := sincro.TamanhoDaParte(total)
 		if p < 5<<20 || (total+p-1)/p > 10000 {
 			t.Errorf("total %d: parte %d dá %d partes", total, p, (total+p-1)/p)
 		}
 	}
-	if _, err := relSeguro("../../etc/passwd"); err == nil {
-		t.Error("relSeguro aceitou subir diretório")
+	if _, err := sincro.ChaveDoUpload(1, "../../etc/passwd"); err == nil {
+		t.Error("ChaveDoUpload aceitou subir diretório")
 	}
 }

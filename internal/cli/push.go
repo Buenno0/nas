@@ -5,17 +5,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"strings"
 	"time"
 
-	"nas/internal/api"
 	"nas/internal/cloud"
 	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/scan"
+	"nas/internal/sincro"
 )
 
 // cmdPush envia um arquivo do Mac para o bucket.
@@ -86,7 +85,11 @@ func cmdPush(ctx context.Context, args []string) error {
 		_ = database.MarcaNaNuvem(ctx, *u.MediaFileID, db.LocalEnviando, "")
 	}
 
-	partes, err := enviarPartes(nctx, arm, u, origem)
+	inicio := time.Now()
+	partes, err := sincro.EnviarArquivo(nctx, arm, u, origem, func(feitos int64) {
+		mbps := float64(feitos) * 8 / 1e6 / max(time.Since(inicio).Seconds(), 0.001)
+		fmt.Printf("\r  %.0f%% de %d MB · %.0f Mbps   ", float64(feitos)*100/float64(max(u.Tamanho, 1)), u.Tamanho>>20, mbps)
+	})
 	if err != nil {
 		if u.MediaFileID != nil {
 			// Não terminou: o arquivo volta a ser só local. O upload segue
@@ -99,11 +102,9 @@ func cmdPush(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if err := arm.ConcluirEnvio(nctx, u.Key, u.UploadID, partes); err != nil {
-		return fmt.Errorf("fechando o envio: %w", err)
-	}
-	if n, err := arm.Tamanho(nctx, u.Key); err != nil || n != u.Tamanho {
-		return fmt.Errorf("o bucket tem %d bytes, esperados %d", n, u.Tamanho)
+	obj, err := sincro.Concluir(nctx, arm, u, partes)
+	if err != nil {
+		return err
 	}
 	if err := database.EstadoDoUpload(ctx, u.ID, "concluido"); err != nil {
 		return err
@@ -112,6 +113,10 @@ func cmdPush(ctx context.Context, args []string) error {
 	if u.MediaFileID != nil {
 		if err := database.MarcaNaNuvem(ctx, *u.MediaFileID, db.LocalAmbos, u.Key); err != nil {
 			return err
+		}
+		f, err := database.FileByID(ctx, *u.MediaFileID)
+		if err == nil {
+			_ = database.MudaCaminho(ctx, f.ID, f.Path, db.LocalAmbos, strings.Trim(obj.ETag, `"`), f.MTime)
 		}
 		fmt.Printf("\npronto: %s agora está no Mac e na nuvem.\n", filepath.Base(origem))
 		return nil
@@ -140,7 +145,7 @@ func prepararPush(ctx context.Context, database *db.DB, arm cloud.Armazenamento,
 		_ = database.EstadoDoUpload(ctx, u.ID, "abortado")
 	}
 
-	u := db.Upload{Tamanho: tamanho, Origem: origem, ParteTamanho: api.TamanhoDaParte(tamanho)}
+	u := db.Upload{Tamanho: tamanho, Origem: origem, ParteTamanho: sincro.TamanhoDaParte(tamanho)}
 	if fileID, err := database.FileIDPorCaminho(ctx, origem); err == nil {
 		f, err := database.FileByID(ctx, fileID)
 		if err != nil {
@@ -166,7 +171,7 @@ func prepararPush(ctx context.Context, database *db.DB, arm cloud.Armazenamento,
 		u.Nome = filepath.Base(origem)
 	}
 
-	key, err := api.ChaveDoUpload(u.LibraryID, u.Nome)
+	key, err := sincro.ChaveDoUpload(u.LibraryID, u.Nome)
 	if err != nil {
 		return db.Upload{}, err
 	}
@@ -179,50 +184,6 @@ func prepararPush(ctx context.Context, database *db.DB, arm cloud.Armazenamento,
 		return db.Upload{}, err
 	}
 	return u, nil
-}
-
-// enviarPartes manda o que falta e devolve a lista completa, em ordem.
-func enviarPartes(ctx context.Context, arm cloud.Armazenamento, u db.Upload, origem string) ([]cloud.Parte, error) {
-	feitas, err := arm.PartesEnviadas(ctx, u.Key, u.UploadID)
-	if err != nil {
-		return nil, fmt.Errorf("consultando partes: %w", err)
-	}
-	tem := map[int32]cloud.Parte{}
-	for _, p := range feitas {
-		tem[p.Numero] = p
-	}
-
-	f, err := os.Open(origem)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	total := int32((u.Tamanho + u.ParteTamanho - 1) / u.ParteTamanho)
-	inicio := time.Now()
-	var enviados int64
-	for n := int32(1); n <= total; n++ {
-		if _, ok := tem[n]; ok {
-			continue
-		}
-		off := int64(n-1) * u.ParteTamanho
-		tam := min(u.ParteTamanho, u.Tamanho-off)
-		etag, err := arm.EnviarParte(ctx, u.Key, u.UploadID, n, io.NewSectionReader(f, off, tam), tam)
-		if err != nil {
-			return nil, fmt.Errorf("parte %d: %w", n, err)
-		}
-		tem[n] = cloud.Parte{Numero: n, ETag: etag}
-		enviados += tam
-		mbps := float64(enviados) * 8 / 1e6 / max(time.Since(inicio).Seconds(), 0.001)
-		fmt.Printf("\r  %d/%d partes · %.0f Mbps   ", len(tem), total, mbps)
-	}
-
-	partes := make([]cloud.Parte, 0, len(tem))
-	for _, p := range tem {
-		partes = append(partes, p)
-	}
-	sort.Slice(partes, func(i, j int) bool { return partes[i].Numero < partes[j].Numero })
-	return partes, nil
 }
 
 // vigiarConfig aciona o kill switch deste processo quando o config.json

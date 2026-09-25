@@ -55,7 +55,17 @@ type Nuvem struct {
 	PathStyle bool   `json:"path_style,omitempty"`
 	// Prefixo isola o Ozymandias dentro de um bucket compartilhado.
 	Prefixo string `json:"prefixo,omitempty"`
+
+	// CloudFront com OAC: com os três preenchidos, a leitura sai assinada
+	// pela CDN em vez de URL pré-assinada do S3. A chave privada mora no SSM
+	// (CDNParametro) e só é lida para a memória ao entrar no híbrido.
+	CDNDominio   string `json:"cdn_dominio,omitempty"`
+	CDNChaveID   string `json:"cdn_chave_id,omitempty"`
+	CDNParametro string `json:"cdn_parametro,omitempty"`
 }
+
+// CDN diz se a leitura deve passar pelo CloudFront.
+func (n Nuvem) CDN() bool { return n.CDNDominio != "" && n.CDNChaveID != "" && n.CDNParametro != "" }
 
 // Configurada diz se há o mínimo para tentar o modo híbrido.
 func (n Nuvem) Configurada() bool { return n.Bucket != "" && n.Regiao != "" }

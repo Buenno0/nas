@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, downloadUrl, soNaNuvem, type FileInfo, type TitleDetail } from '../lib/api'
+import { api, downloadUrl, soNaNuvem, type AcaoDeNuvem, type FileInfo, type TitleDetail } from '../lib/api'
 import { useHibrido } from '../lib/nuvem'
 import { clockTime, gradientFor, humanDuration, humanSize, kindLabel } from '../lib/format'
 import { CloudOffIcon, DownloadIcon, HeartIcon, PauseIcon, PlayIcon } from '../components/icons'
@@ -443,6 +443,8 @@ function FileList({ files }: { files: FileInfo[] }) {
                 </p>
               </div>
 
+              <AcoesDeNuvem file={file} />
+
               <a
                 href={downloadUrl(file.id)}
                 className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-elev hover:text-ink"
@@ -461,5 +463,79 @@ function FileList({ files }: { files: FileInfo[] }) {
         )
       })}
     </ul>
+  )
+}
+
+const confirmacoes: Partial<Record<AcaoDeNuvem, string>> = {
+  liberar:
+    'Apagar a cópia deste arquivo no Mac? Ela só é apagada depois de o servidor provar que a da nuvem é idêntica. O item continua no catálogo e toca da nuvem no modo híbrido.',
+  remover:
+    'Apagar a cópia deste arquivo na nuvem? A do Mac continua. O bucket guarda a versão anterior por 30 dias.',
+}
+
+/** Onde o arquivo mora e o que dá para fazer com ele. Só o administrador
+ *  move arquivos, e só no híbrido: no local, nada fala com a nuvem. */
+function AcoesDeNuvem({ file }: { file: FileInfo }) {
+  const queryClient = useQueryClient()
+  const hibrido = useHibrido()
+  const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.me })
+  const [pedido, setPedido] = useState<AcaoDeNuvem | null>(null)
+  const acao = useMutation({
+    mutationFn: (a: AcaoDeNuvem) => api.acaoDeNuvem(file.id, a),
+    onSuccess: (_, a) => {
+      setPedido(a)
+      // O motor trabalha em segundo plano; a tela volta a olhar em instantes.
+      window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['title'] }), 1500)
+    },
+  })
+  if (!user?.is_admin || !hibrido) return null
+
+  const loc = file.localizacao ?? 'local'
+  const opcoes: { acao: AcaoDeNuvem; rotulo: string; perigo?: boolean }[] =
+    loc === 'local'
+      ? [{ acao: 'enviar', rotulo: 'Enviar à nuvem' }]
+      : loc === 'nuvem'
+        ? [{ acao: 'fixar', rotulo: 'Disponível offline' }]
+        : loc === 'ambos'
+          ? [
+              { acao: 'liberar', rotulo: 'Liberar espaço', perigo: true },
+              { acao: 'remover', rotulo: 'Tirar da nuvem', perigo: true },
+            ]
+          : []
+
+  if (opcoes.length === 0 || pedido) {
+    const texto = pedido
+      ? 'na fila'
+      : loc === 'enviando'
+        ? 'enviando…'
+        : loc === 'baixando'
+          ? 'baixando…'
+          : ''
+    return texto ? <span className="shrink-0 text-xs text-muted">{texto}</span> : null
+  }
+
+  return (
+    <div className="hidden shrink-0 items-center gap-1 sm:flex">
+      {opcoes.map((o) => (
+        <button
+          key={o.acao}
+          type="button"
+          disabled={acao.isPending}
+          title={acao.isError ? (acao.error as Error).message : undefined}
+          onClick={() => {
+            const aviso = confirmacoes[o.acao]
+            if (aviso && !window.confirm(aviso)) return
+            acao.mutate(o.acao)
+          }}
+          className={[
+            'rounded-md px-2 py-1 text-xs font-medium transition disabled:opacity-50',
+            o.perigo ? 'text-muted hover:bg-danger/10 hover:text-danger' : 'text-muted hover:bg-elev hover:text-ink',
+          ].join(' ')}
+        >
+          {o.rotulo}
+        </button>
+      ))}
+      {acao.isError && <span className="text-xs text-danger">falhou</span>}
+    </div>
   )
 }

@@ -28,8 +28,9 @@ resource "aws_iam_role" "mac" {
   })
 }
 
-# Menor privilégio: só este bucket, só o prefixo do Ozymandias, sem apagar
-# objetos (apagar da nuvem é ação local e explícita, fica para o V2).
+# Menor privilégio: só este bucket e só os prefixos do Ozymandias. Apagar
+# existe porque "tirar da nuvem" existe, mas com versioning a versão anterior
+# fica 30 dias recuperável.
 resource "aws_iam_role_policy" "mac" {
   name = "bucket-de-midia"
   role = aws_iam_role.mac.id
@@ -48,10 +49,24 @@ resource "aws_iam_role_policy" "mac" {
         Action = [
           "s3:GetObject",
           "s3:PutObject",
+          "s3:DeleteObject",
           "s3:AbortMultipartUpload",
           "s3:ListMultipartUploadParts",
         ]
         Resource = "${aws_s3_bucket.midia.arn}/bibliotecas/*"
+      },
+      {
+        # O journal só cresce: o Mac escreve, nunca lê nem apaga.
+        Sid      = "Journal"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.midia.arn}/eventos/mac/*"
+      },
+      {
+        Sid      = "ChaveDaCDN"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = aws_ssm_parameter.chave_cdn.arn
       },
     ]
   })

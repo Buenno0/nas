@@ -20,6 +20,7 @@ import (
 	"nas/internal/db"
 	"nas/internal/media"
 	"nas/internal/metrics"
+	"nas/internal/sincro"
 	"nas/internal/web"
 )
 
@@ -46,6 +47,7 @@ type Server struct {
 	scan    scanState
 	ruinas  ruinas
 	nuvem   *cloud.Chave
+	sincro  *sincro.Motor
 
 	// preparador cuida da transcodificação sob demanda; fundo é o contexto do
 	// servidor, para um preparo sobreviver à requisição que o pediu mas morrer
@@ -80,8 +82,10 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 	if chave == nil {
 		chave = cloud.Nova(func() config.Nuvem { return config.Nuvem{} }, true)
 	}
+	motor := sincro.Novo(database, chave, func() int64 { return int64(cfg.ReservaGB * 1e9) })
 	return &Server{
 		nuvem:   chave,
+		sincro:  motor,
 		cfg:     cfg,
 		db:      database,
 		auth:    auth.NewService(database),
@@ -176,6 +180,13 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/uploads/{id}/concluir", s.adminOnly(s.handleConcluirUpload))
 	mux.Handle("DELETE /api/uploads/{id}", s.adminOnly(s.handleAbortarUpload))
 
+	// Localização: fixar, liberar espaço, enviar, remover da nuvem. As duas
+	// destrutivas (liberar, remover) só nascem daqui, nunca de um evento.
+	mux.Handle("GET /api/sincronizacao", s.adminOnly(s.handleSincronizacao))
+	mux.Handle("POST /api/sincronizacao", s.adminOnly(s.handleReconciliar))
+	mux.Handle("POST /api/files/{id}/nuvem/{acao}", s.adminOnly(s.handleAcaoDeNuvem))
+	mux.Handle("PUT /api/libraries/{id}/espelhada", s.adminOnly(s.handleEspelhada))
+
 	mux.Handle("GET /api/settings", s.protected(s.handleGetSettings))
 	mux.Handle("PUT /api/settings", s.adminOnly(s.handlePutSettings))
 
@@ -255,6 +266,7 @@ func (s *Server) Serve(ctx context.Context, addr string) error {
 	s.preparador.LimparParciais()
 
 	go s.cleanupLoop(ctx)
+	go s.sincro.Rodar(ctx)
 	go s.amostraLoop(ctx)
 	s.StartBackgroundJobs(ctx)
 

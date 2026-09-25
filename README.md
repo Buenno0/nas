@@ -676,9 +676,43 @@ local continua inteiro e o híbrido responde "sem suporte".
 Teste do adapter contra MinIO (sem AWS): veja o comentário em
 `internal/cloud/aws/s3_test.go`.
 
-Ainda não existe (fases seguintes do plano): fixar/liberar espaço, outbox e
-reconciliação, CloudFront, preparo (transcodificação) de itens da nuvem,
-workers em Docker e instância cloud.
+**Fixar e liberar espaço.** Na página do título, no híbrido, o admin vê em
+cada arquivo o que dá para fazer:
+
+| está | ação | vira |
+|---|---|---|
+| só no Mac | *Enviar à nuvem* | no Mac e na nuvem |
+| só na nuvem | *Disponível offline* (baixa para a pasta da biblioteca) | no Mac e na nuvem |
+| nos dois | *Liberar espaço* (apaga a cópia do Mac) | só na nuvem |
+| nos dois | *Tirar da nuvem* (apaga a cópia do bucket) | só no Mac |
+
+Liberar espaço só apaga depois de recalcular sobre o arquivo local o ETag que o
+S3 daria a ele (md5 das partes, com o tamanho de parte lido do próprio bucket)
+e compará-lo ao do objeto: cópia diferente, nada é apagado. As duas ações
+destrutivas só nascem de um clique (com confirmação), nunca de um evento.
+Fixar confere o download do mesmo jeito, respeita a `reserva_gb` de espaço
+livre e retoma de onde parou.
+
+**Biblioteca espelhada.** Em Configurações → Bibliotecas, *espelhar* faz todo
+arquivo local dela ganhar cópia na nuvem no híbrido (um envio por vez).
+
+**Sincronização.** Toda mudança (progresso, favoritos, localização) vai para
+um outbox local, também no modo local. Ao entrar no híbrido, e a cada 15
+minutos nele, o servidor: importa ao catálogo objetos de `bibliotecas/` que
+ele não conhece; retoma envios, `nas push` e downloads interrompidos;
+espelha; e drena o outbox para `eventos/mac/*.jsonl` no bucket (eventos com
+`schema_version`). O kill switch interrompe tudo isso e a próxima entrada no
+híbrido continua sem perder nada.
+
+**CloudFront.** Com `nuvem.cdn_dominio`, `nuvem.cdn_chave_id` e
+`nuvem.cdn_parametro` configurados (o `tofu apply` imprime os comandos), a
+mídia é lida por URL assinada do CloudFront (`*.cloudfront.net`, bucket
+privado com OAC) em vez de URL pré-assinada do S3. A chave de assinatura mora
+no SSM e só é lida para a memória ao entrar no híbrido; o kill switch a
+descarta. A chave é gerada pelo OpenTofu, então também fica no tfstate local.
+
+Ainda não existe (fases seguintes do plano): preparo (transcodificação) de
+itens da nuvem, workers em Docker e instância cloud.
 
 ## Limitações conhecidas
 
