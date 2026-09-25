@@ -738,8 +738,7 @@ O service fica em **0 réplicas** sem fila e sobe até `workers_max` pela
 profundidade dela (step scaling). Rede na VPC padrão com IP público, sem NAT.
 
 ```bash
-make imagem                                              # constrói linux/arm64
-make publicar-imagem ECR_URL=$(tofu -chdir=infra output -raw ecr_url)
+make publicar-imagem   # constrói no CodeBuild (ARM) e envia ao ECR; o Mac não roda Docker
 nas config set nuvem.fila_jobs …                         # outputs do tofu
 nas config set nuvem.fila_eventos …
 ```

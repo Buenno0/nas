@@ -30,3 +30,11 @@ output "configurar_nas" {
 output "ecr_url" {
   value = aws_ecr_repository.worker.repository_url
 }
+
+output "bucket_build" {
+  value = aws_s3_bucket.build.bucket
+}
+
+output "projeto_build" {
+  value = aws_codebuild_project.imagem.name
+}

@@ -1,9 +1,8 @@
 # Imagem da nuvem: o mesmo binário faz o worker (nas worker) e a instância
-# cloud (ozymandias-nuvem, que é nas serve --nuvem sob o Litestream). Docker só existe aqui, na AWS: no Mac o
-# Ozymandias continua nativo. arm64 serve ao Graviton do Fargate e ao M4.
+# cloud (ozymandias-nuvem, que é nas serve --nuvem sob o Litestream). Docker só
+# existe na AWS: no Mac o Ozymandias continua nativo. arm64 serve ao Graviton.
 #
-#   make imagem            constrói linux/arm64
-#   make publicar-imagem   envia ao ECR (precisa de ECR_URL)
+#   make publicar-imagem   constrói no CodeBuild (ARM) e envia ao ECR
 
 FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS build
 ARG TARGETOS=linux TARGETARCH=arm64
