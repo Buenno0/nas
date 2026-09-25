@@ -217,10 +217,22 @@ func Processar(ctx context.Context, arm cloud.Armazenamento, dir, key string) (c
 
 		// O MP4 compatível só existe quando o original não toca num
 		// navegador comum: o direto continua sendo lido do próprio objeto.
-		plano := media.DecideWithSize(ext, probe.VCodec, probe.PixFmt, probe.VProfile, probe.ACodec,
-			probe.Width, probe.Height, false, media.Caps{})
+		// Com uma faixa AAC no mesmo idioma da padrão, ela entra no MP4 e o
+		// áudio não é recodificado: só reembalar, bem mais rápido.
+		acodec, audio, trocou := probe.ACodec, -1, false
+		var faixas []media.FaixaDeAudio
+		for _, st := range probe.Streams {
+			if st.Kind == string(db.StreamAudio) {
+				faixas = append(faixas, media.FaixaDeAudio{Index: st.Index, Codec: st.Codec, Lang: st.Lang, Default: st.Default})
+			}
+		}
+		if alt, ok := media.AudioAlternativo(faixas, media.Caps{}); ok {
+			acodec, audio, trocou = alt.Codec, alt.Index, true
+		}
+		plano := media.DecideWithSize(ext, probe.VCodec, probe.PixFmt, probe.VProfile, acodec,
+			probe.Width, probe.Height, trocou, media.Caps{})
 		if plano.Mode != media.ModeDirect {
-			pedido := media.Pedido{Origem: origem, Duracao: probe.Duration, Receita: plano.Recipe, Audio: -1}
+			pedido := media.Pedido{Origem: origem, Duracao: probe.Duration, Receita: plano.Recipe, Audio: audio}
 			if _, err := prep.Pedir(ctx, pedido); err != nil {
 				return cloud.Manifesto{}, fmt.Errorf("preparando (%s): %w", plano.Recipe, err)
 			}

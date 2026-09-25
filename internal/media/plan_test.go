@@ -180,3 +180,23 @@ func TestConjuntoVazioCaiNoPadrao(t *testing.T) {
 		t.Errorf("lista só de lixo virou %v, quero nil", m)
 	}
 }
+
+func TestAudioAlternativoPrefereAACDoMesmoIdioma(t *testing.T) {
+	faixas := []FaixaDeAudio{
+		{Index: 1, Codec: "eac3", Lang: "por", Default: true},
+		{Index: 2, Codec: "aac", Lang: "eng"},
+		{Index: 3, Codec: "aac", Lang: "por"},
+	}
+	f, ok := AudioAlternativo(faixas, Caps{})
+	if !ok || f.Index != 3 {
+		t.Fatalf("queria a faixa 3 (aac por), veio %+v %v", f, ok)
+	}
+	// Só outro idioma: não troca a língua de quem assiste.
+	if _, ok := AudioAlternativo(faixas[:2], Caps{}); ok {
+		t.Fatal("trocou de idioma para achar um codec compatível")
+	}
+	// A padrão já toca: nada muda.
+	if _, ok := AudioAlternativo([]FaixaDeAudio{{Index: 1, Codec: "aac", Default: true}, {Index: 2, Codec: "aac"}}, Caps{}); ok {
+		t.Fatal("trocou uma faixa que já tocava")
+	}
+}

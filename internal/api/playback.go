@@ -121,6 +121,12 @@ func dimensaoDaQuery(value string) int {
 func (s *Server) faixaEscolhida(r *http.Request, arquivo db.MediaFile) (int, string, bool) {
 	bruto := r.URL.Query().Get("audio")
 	if bruto == "" {
+		// Sem escolha do usuário: se a faixa padrão não toca aqui mas existe
+		// outra no mesmo idioma que toca, vai ela (reembalar em vez de
+		// recodificar o áudio).
+		if alt, ok := s.audioAlternativo(r.Context(), arquivo, capsDaQuery(r)); ok {
+			return alt.Index, alt.Codec, true
+		}
 		return -1, arquivo.ACodec, false
 	}
 	idx, err := strconv.Atoi(bruto)
@@ -132,6 +138,20 @@ func (s *Server) faixaEscolhida(r *http.Request, arquivo db.MediaFile) (int, str
 		return -1, arquivo.ACodec, false
 	}
 	return faixa.Index, faixa.Codec, !faixa.Default
+}
+
+func (s *Server) audioAlternativo(ctx context.Context, arquivo db.MediaFile, caps media.Caps) (media.FaixaDeAudio, bool) {
+	streams, err := s.db.Streams(ctx, arquivo.ID)
+	if err != nil {
+		return media.FaixaDeAudio{}, false
+	}
+	var faixas []media.FaixaDeAudio
+	for _, st := range streams {
+		if st.Kind == db.StreamAudio {
+			faixas = append(faixas, media.FaixaDeAudio{Index: st.Index, Codec: st.Codec, Lang: st.Lang, Default: st.Default})
+		}
+	}
+	return media.AudioAlternativo(faixas, caps)
 }
 
 func (s *Server) planoDeArquivo(r *http.Request, arquivo db.MediaFile) (media.Plan, media.Pedido) {

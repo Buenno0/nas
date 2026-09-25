@@ -251,3 +251,42 @@ func videoIncompativel(vcodec, pixFmt, vprofile string, caps Caps) (string, bool
 	}
 	return "", true
 }
+
+// FaixaDeAudio é o mínimo de uma faixa para escolher qual tocar.
+type FaixaDeAudio struct {
+	Index   int
+	Codec   string
+	Lang    string
+	Default bool
+}
+
+// AudioAlternativo acha, quando a faixa padrão não toca neste aparelho, outra
+// faixa do MESMO idioma que toque (o AAC estéreo que muitos releases trazem
+// ao lado do eac3/dts). Com ela, basta reembalar em vez de recodificar o
+// áudio: mais rápido e sem perda. ok=false quando a padrão já toca ou não há
+// alternativa — aí vale a decisão de sempre.
+func AudioAlternativo(faixas []FaixaDeAudio, caps Caps) (FaixaDeAudio, bool) {
+	var padrao *FaixaDeAudio
+	for i := range faixas {
+		if faixas[i].Default {
+			padrao = &faixas[i]
+			break
+		}
+	}
+	if padrao == nil && len(faixas) > 0 {
+		padrao = &faixas[0] // sem disposição marcada, o ffmpeg usa a primeira
+	}
+	if padrao == nil || caps.toca(strings.ToLower(padrao.Codec)) {
+		return FaixaDeAudio{}, false
+	}
+	idioma := strings.ToLower(padrao.Lang)
+	for _, f := range faixas {
+		if f.Index == padrao.Index || !caps.toca(strings.ToLower(f.Codec)) {
+			continue
+		}
+		if strings.ToLower(f.Lang) == idioma {
+			return f, true
+		}
+	}
+	return FaixaDeAudio{}, false
+}
