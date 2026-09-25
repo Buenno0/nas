@@ -119,7 +119,7 @@ func tratar(ctx context.Context, arm cloud.Armazenamento, filas cloud.Mensageria
 			evento.Tipo, evento.Manifesto = "job.concluido", &man
 		}
 		corpo, _ := json.Marshal(evento)
-		if err := filas.Publicar(ctx, cfg.Topico, corpo); err != nil {
+		if err := filas.Publicar(ctx, cfg.Topico, corpo, "worker"); err != nil {
 			log.Printf("publicando %s: %v", evento.Tipo, err)
 			return // sem anúncio, o job é refeito: melhor que um Mac desinformado
 		}

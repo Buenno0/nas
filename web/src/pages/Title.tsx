@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, downloadUrl, soNaNuvem, type AcaoDeNuvem, type FileInfo, type TitleDetail } from '../lib/api'
-import { useHibrido } from '../lib/nuvem'
+import { useDisponibilidade, useHibrido, useModoNuvem } from '../lib/nuvem'
 import { clockTime, gradientFor, humanDuration, humanSize, kindLabel } from '../lib/format'
 import { CloudOffIcon, DownloadIcon, HeartIcon, PauseIcon, PlayIcon } from '../components/icons'
 import { ErrorState, Spinner } from '../components/states'
@@ -386,7 +386,8 @@ function TrackList({ detail }: { detail: TitleDetail }) {
 }
 
 function FileList({ files }: { files: FileInfo[] }) {
-  const hibrido = useHibrido()
+  const disp = useDisponibilidade()
+  const hibrido = disp.hibrido
   if (files.length === 0) return null
 
   return (
@@ -401,9 +402,9 @@ function FileList({ files }: { files: FileInfo[] }) {
         return (
           <li key={file.id} className="relative">
             <div className="flex items-center gap-3 px-3 py-3 sm:px-4">
-              {soNaNuvem(file.localizacao) && !hibrido ? (
+              {!disp.tocaArquivo(file.localizacao) ? (
                 <span
-                  title="Na nuvem, indisponível no modo local"
+                  title={`${disp.ondeMora}, indisponível aqui`}
                   className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-elev text-muted"
                 >
                   <CloudOffIcon />
@@ -427,13 +428,17 @@ function FileList({ files }: { files: FileInfo[] }) {
                     file.vcodec || file.acodec,
                     humanSize(file.size),
                     file.finished ? 'assistido' : '',
-                    soNaNuvem(file.localizacao)
-                      ? hibrido
-                        ? 'na nuvem'
-                        : 'na nuvem, indisponível'
-                      : file.localizacao === 'ambos'
-                        ? 'no Mac e na nuvem'
-                        : '',
+                    disp.naNuvem
+                      ? disp.tocaArquivo(file.localizacao)
+                        ? ''
+                        : 'no Mac, indisponível'
+                      : soNaNuvem(file.localizacao)
+                        ? hibrido
+                          ? 'na nuvem'
+                          : 'na nuvem, indisponível'
+                        : file.localizacao === 'ambos'
+                          ? 'no Mac e na nuvem'
+                          : '',
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -488,7 +493,8 @@ function AcoesDeNuvem({ file }: { file: FileInfo }) {
       window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['title'] }), 1500)
     },
   })
-  if (!user?.is_admin || !hibrido) return null
+  const estado = useModoNuvem()
+  if (!user?.is_admin || !hibrido || estado?.papel === 'nuvem') return null
 
   const loc = file.localizacao ?? 'local'
   const opcoes: { acao: AcaoDeNuvem; rotulo: string; perigo?: boolean }[] =

@@ -135,6 +135,10 @@ func ClientIP(r *http.Request, trustProxy bool) string {
 		if cf := r.Header.Get("CF-Connecting-IP"); cf != "" {
 			return cf
 		}
+		// Na instância cloud o proxy do loopback é o tailscale serve.
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			return strings.TrimSpace(strings.Split(xff, ",")[0])
+		}
 	}
 	return host
 }

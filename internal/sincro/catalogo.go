@@ -51,7 +51,7 @@ func (m *Motor) PedirProcessamento(ctx context.Context, fileID int64) error {
 // consumirCatalogo lê a assinatura do Mac no tópico catalogo enquanto o
 // híbrido durar. Long-poll de 20 s: barato, e o kill switch o corta na hora.
 func (m *Motor) consumirCatalogo(ctx context.Context) {
-	fila := m.cfg().FilaMac
+	fila := m.cfg().FilaEventos
 	if fila == "" {
 		return
 	}
@@ -95,6 +95,15 @@ func (m *Motor) AplicarEvento(ctx context.Context, arm cloud.Armazenamento, corp
 	}
 	if json.Unmarshal(corpo, &envelope) == nil && envelope.Type == "Notification" {
 		corpo = []byte(envelope.Message)
+	}
+	// Evento de outro nó (outbox) ou do worker (job.*)?
+	var fed cloud.EventoFederado
+	if err := json.Unmarshal(corpo, &fed); err == nil && fed.EventID != "" {
+		if fed.SchemaVersion > cloud.VersaoDoContrato {
+			log.Printf("evento %s com schema_version %d: ignorado", idDoEvento(fed), fed.SchemaVersion)
+			return nil
+		}
+		return m.aplicarFederado(ctx, arm, fed)
 	}
 	var ev cloud.EventoDoCatalogo
 	if err := json.Unmarshal(corpo, &ev); err != nil {

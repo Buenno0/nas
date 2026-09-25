@@ -173,6 +173,14 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request) {
 		Localizacao: arquivo.Localizacao,
 	}
 
+	// Na instância cloud, item sem cópia no bucket mora só no Mac.
+	if s.opts.NaNuvem && !db.SoNaNuvem(arquivo.Localizacao) {
+		resp.Indisponivel = true
+		resp.Motivo = "no Mac, indisponível na nuvem"
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
 	// Item só da nuvem: toca direto da CDN/bucket ou não toca. O preparo
 	// (transcodificação) de itens da nuvem é trabalho dos workers do V3.
 	if db.SoNaNuvem(arquivo.Localizacao) {

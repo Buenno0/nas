@@ -88,6 +88,8 @@ export interface TitleCard {
   meta_state: string
   /** Nenhum arquivo do título tem cópia no Mac. */
   so_na_nuvem?: boolean
+  /** Nenhum arquivo tem cópia no bucket: na instância cloud, indisponível. */
+  so_no_mac?: boolean
 }
 
 export interface ContinueItem {
@@ -185,6 +187,8 @@ export interface EstadoNuvem {
   configurada: boolean
   suporte: boolean
   nuvem_bloqueadas_total: number
+  /** "nuvem" na instância cloud (nas serve --nuvem). */
+  papel?: 'mac' | 'nuvem'
 }
 
 export interface Upload {

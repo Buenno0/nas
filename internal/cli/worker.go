@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"nas/internal/cloud"
 	"nas/internal/config"
@@ -29,13 +28,7 @@ func cmdWorker(ctx context.Context, args []string) error {
 		return err
 	}
 
-	nuvem := config.Nuvem{
-		Bucket:    os.Getenv("NAS_BUCKET"),
-		Regiao:    os.Getenv("NAS_REGIAO"),
-		Endpoint:  os.Getenv("NAS_ENDPOINT"),
-		Prefixo:   strings.Trim(os.Getenv("NAS_PREFIXO"), "/"),
-		PathStyle: os.Getenv("NAS_ENDPOINT") != "",
-	}
+	nuvem := nuvemDoAmbiente()
 	cfg := worker.Config{
 		FilaJobs: os.Getenv("NAS_FILA_JOBS"),
 		Topico:   os.Getenv("NAS_TOPICO_CATALOGO"),

@@ -421,10 +421,13 @@ export function Watch() {
       {plano?.indisponivel && (
         <div className="absolute inset-0 grid place-items-center bg-black/85 p-6 text-center text-white">
           <div className="max-w-sm">
-            <p className="text-lg font-semibold">Na nuvem, indisponível</p>
+            <p className="text-lg font-semibold">
+              {plano.motivo.startsWith('no Mac') ? 'No Mac, indisponível' : 'Na nuvem, indisponível'}
+            </p>
             <p className="mt-2 text-sm text-white/70">
-              Este arquivo mora só no bucket e o servidor está no modo local. Ligue o híbrido em
-              Configurações para tocar.
+              {plano.motivo.startsWith('no Mac')
+                ? 'Este arquivo só existe no disco do Mac. Ele toca daqui quando tiver uma cópia na nuvem, ou abra o Ozymandias do Mac.'
+                : 'Este arquivo mora só no bucket e o servidor está no modo local. Ligue o híbrido em Configurações para tocar.'}
             </p>
           </div>
         </div>

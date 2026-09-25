@@ -56,18 +56,24 @@ resource "aws_iam_role_policy" "mac" {
         Resource = "${aws_s3_bucket.midia.arn}/bibliotecas/*"
       },
       {
-        # O journal só cresce: o Mac escreve, nunca lê nem apaga.
+        # Journal e snapshot/pôsteres para a instância cloud: o Mac escreve.
         Sid      = "Journal"
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
-        Resource = "${aws_s3_bucket.midia.arn}/eventos/mac/*"
+        Resource = ["${aws_s3_bucket.midia.arn}/eventos/mac/*", "${aws_s3_bucket.midia.arn}/catalogo/*"]
+      },
+      {
+        Sid      = "Publicar"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = aws_sns_topic.catalogo.arn
       },
       {
         # Derivados do worker: o Mac só lê (assina URLs para o player).
         Sid      = "Derivados"
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
-        Resource = "${aws_s3_bucket.midia.arn}/derivados/*"
+        Resource = ["${aws_s3_bucket.midia.arn}/derivados/*", "${aws_s3_bucket.midia.arn}/catalogo/*"]
       },
       {
         Sid      = "PedirJobs"

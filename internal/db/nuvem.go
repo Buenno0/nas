@@ -205,6 +205,9 @@ type Evento struct {
 // RegistraEvento grava no outbox. Falhar aqui nunca derruba a ação que gerou
 // o evento: o outbox é para a nuvem saber, não para o Mac funcionar.
 func (d *DB) RegistraEvento(ctx context.Context, tipo string, payload any) {
+	if semEventos(ctx) {
+		return
+	}
 	corpo, err := json.Marshal(payload)
 	if err != nil {
 		return

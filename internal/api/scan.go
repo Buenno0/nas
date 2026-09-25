@@ -141,6 +141,11 @@ func (s *Server) handleMetadataStart(w http.ResponseWriter, r *http.Request) {
 // passam pelo mesmo caminho do botão "escanear agora", então nunca há dois
 // scans ao mesmo tempo.
 func (s *Server) StartBackgroundJobs(ctx context.Context) {
+	// A instância cloud não tem pastas para varrer: o catálogo dela vem do
+	// snapshot do Mac, com metadados já buscados.
+	if s.opts.NaNuvem {
+		return
+	}
 	// Um scan logo depois de subir: enquanto o NAS esteve desligado, arquivos
 	// podem ter sido movidos ou apagados, e o watcher não viu nada disso.
 	go func() {

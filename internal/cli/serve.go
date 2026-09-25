@@ -31,8 +31,12 @@ func cmdServe(ctx context.Context, args []string) error {
 	name := fs.String("tunnel-name", "", "tunnel nomeado do cloudflared (padrão: quick tunnel)")
 	port := fs.Int("port", 0, "porta (sobrescreve a configuração)")
 	semNuvem := fs.Bool("sem-nuvem", false, "força o modo de nuvem local nesta execução, ignorando o config (break-glass)")
+	naNuvem := fs.Bool("nuvem", false, "instância cloud (roda no container da AWS)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *naNuvem {
+		return serveNuvem(ctx, *port)
 	}
 
 	if *local && *tunnelFlag {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+	snstypes "github.com/aws/aws-sdk-go-v2/service/sns/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 
@@ -53,7 +54,12 @@ func (b *bucket) EstenderVisibilidade(ctx context.Context, fila, recibo string, 
 	return err
 }
 
-func (b *bucket) Publicar(ctx context.Context, topico string, corpo []byte) error {
-	_, err := b.sns.Publish(ctx, &sns.PublishInput{TopicArn: &topico, Message: aws.String(string(corpo))})
+func (b *bucket) Publicar(ctx context.Context, topico string, corpo []byte, origem string) error {
+	_, err := b.sns.Publish(ctx, &sns.PublishInput{
+		TopicArn: &topico, Message: aws.String(string(corpo)),
+		MessageAttributes: map[string]snstypes.MessageAttributeValue{
+			"origem": {DataType: aws.String("String"), StringValue: aws.String(origem)},
+		},
+	})
 	return err
 }

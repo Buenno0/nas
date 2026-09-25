@@ -113,17 +113,24 @@ resource "aws_sqs_queue_policy" "mac" {
   })
 }
 
+# Cada nó descarta os próprios eventos pelo filtro da assinatura.
 resource "aws_sns_topic_subscription" "mac" {
   topic_arn            = aws_sns_topic.catalogo.arn
   protocol             = "sqs"
   endpoint             = aws_sqs_queue.mac.arn
   raw_message_delivery = true
+  filter_policy        = jsonencode({ origem = ["worker", "nuvem"] })
 }
 
 # --- ECS --------------------------------------------------------------------
 
 resource "aws_ecs_cluster" "ozymandias" {
   name = "ozymandias"
+  # RunningTaskCount do alarme da instância cloud vem daqui.
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
 }
 
 resource "aws_ecs_cluster_capacity_providers" "spot" {
@@ -209,6 +216,7 @@ resource "aws_ecs_task_definition" "worker" {
     name      = "worker"
     image     = "${aws_ecr_repository.worker.repository_url}:${var.imagem_tag}"
     essential = true
+    command   = ["nas", "worker"]
     environment = [
       { name = "NAS_BUCKET", value = aws_s3_bucket.midia.bucket },
       { name = "NAS_REGIAO", value = var.regiao },

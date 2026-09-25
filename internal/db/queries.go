@@ -27,6 +27,9 @@ type TitleCard struct {
 	// SoNaNuvem: nenhum arquivo do título tem cópia no Mac. No modo local o
 	// card aparece como "na nuvem, indisponível".
 	SoNaNuvem bool `json:"so_na_nuvem,omitempty"`
+	// SoNoMac: nenhum arquivo tem cópia no bucket. Na instância cloud o card
+	// aparece como "no Mac, indisponível".
+	SoNoMac bool `json:"so_no_mac,omitempty"`
 }
 
 // TitleFilter monta a listagem da biblioteca.
@@ -50,7 +53,9 @@ const titleCardSelect = `
 	       (SELECT COUNT(*) FROM media_files f WHERE f.title_id = t.id),
 	       (SELECT IFNULL(SUM(f.duration), 0) FROM media_files f WHERE f.title_id = t.id),
 	       NOT EXISTS (SELECT 1 FROM media_files f WHERE f.title_id = t.id
-	                      AND f.localizacao NOT IN ('nuvem', 'baixando'))
+	                      AND f.localizacao NOT IN ('nuvem', 'baixando')),
+	       NOT EXISTS (SELECT 1 FROM media_files f WHERE f.title_id = t.id
+	                      AND f.localizacao NOT IN ('local', 'enviando'))
 	  FROM titles t`
 
 // ListTitles devolve os títulos que casam com o filtro.
@@ -181,7 +186,7 @@ func scanCard(rows *sql.Rows) (TitleCard, error) {
 	var c TitleCard
 	var kind string
 	err := rows.Scan(&c.ID, &c.LibraryID, &kind, &c.Name, &c.Year, &c.Artist,
-		&c.Rating, &c.Poster, &c.Backdrop, &c.Genres, &c.MetaState, &c.Files, &c.Duration, &c.SoNaNuvem)
+		&c.Rating, &c.Poster, &c.Backdrop, &c.Genres, &c.MetaState, &c.Files, &c.Duration, &c.SoNaNuvem, &c.SoNoMac)
 	c.Kind = TitleKind(kind)
 	return c, err
 }
@@ -497,16 +502,21 @@ func (d *DB) SaveProgress(ctx context.Context, userID, fileID int64, position, d
 	if err != nil {
 		return fmt.Errorf("salvando progresso: %w", err)
 	}
-	d.RegistraEvento(ctx, "progresso.atualizado", map[string]any{
-		"user_id": userID, "file_id": fileID, "posicao": position, "duracao": duration,
-	})
+	if ref, err := d.RefDoArquivo(ctx, fileID); err == nil {
+		d.RegistraEvento(ctx, "progresso.atualizado", map[string]any{
+			"user_id": userID, "ref": ref, "posicao": position, "duracao": duration,
+			"updated_at": time.Now().Unix(),
+		})
+	}
 	return nil
 }
 
 func (d *DB) SetFavorite(ctx context.Context, userID, titleID int64, on bool) error {
-	d.RegistraEvento(ctx, "favorito.alterado", map[string]any{
-		"user_id": userID, "title_id": titleID, "favorito": on,
-	})
+	if ref, err := d.RefDoTitulo(ctx, titleID); err == nil {
+		d.RegistraEvento(ctx, "favorito.alterado", map[string]any{
+			"user_id": userID, "ref": ref, "favorito": on,
+		})
+	}
 	if !on {
 		_, err := d.ExecContext(ctx, `DELETE FROM favorites WHERE user_id = ? AND title_id = ?`, userID, titleID)
 		return err

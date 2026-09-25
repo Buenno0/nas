@@ -65,9 +65,10 @@ export function Layout({ children }: { children: ReactNode }) {
  *  Ozymandias sem bucket configurado, o modo local é o único que existe. */
 function SeloDoModo() {
   const estado = useModoNuvem()
-  if (!estado || (!estado.configurada && estado.modo === 'local')) return null
+  if (!estado || (!estado.configurada && estado.modo === 'local' && estado.papel !== 'nuvem')) return null
   const hibrido = estado.modo === 'hibrido'
-  const rotulo = estado.modo === 'conectando' ? 'Conectando' : hibrido ? 'Híbrido' : 'Local'
+  const naNuvem = estado.papel === 'nuvem'
+  const rotulo = naNuvem ? 'Nuvem' : estado.modo === 'conectando' ? 'Conectando' : hibrido ? 'Híbrido' : 'Local'
   return (
     <Link
       to="/settings"

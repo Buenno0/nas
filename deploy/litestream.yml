@@ -1,0 +1,10 @@
+# Réplica contínua do SQLite da instância cloud no bucket. Se a task Spot for
+# interrompida, a próxima restaura daqui em segundos.
+dbs:
+  - path: /trabalho/.nas/nas.db
+    replicas:
+      - type: s3
+        bucket: ${NAS_BUCKET}
+        path: estado/nuvem/nas.db
+        region: ${NAS_REGIAO}
+        sync-interval: 1s

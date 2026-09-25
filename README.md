@@ -80,6 +80,7 @@ digite o IP, mesmo quando o roteador atribui outro endereço ao computador.
 | `nas modo [local\|hibrido]` | modo de nuvem; `local` é o kill switch |
 | `nas push <arquivo> [--lib N]` | envia ao bucket (modo híbrido) |
 | `nas worker [--uma-vez]` | processador da nuvem (roda no container) |
+| `nas serve --nuvem` | instância cloud (roda no container) |
 | `nas status` / `nas stop` | estado da instância / encerra |
 
 O tipo da biblioteca é inferido pelo nome da pasta quando possível
@@ -740,14 +741,50 @@ profundidade dela (step scaling). Rede na VPC padrão com IP público, sem NAT.
 make imagem                                              # constrói linux/arm64
 make publicar-imagem ECR_URL=$(tofu -chdir=infra output -raw ecr_url)
 nas config set nuvem.fila_jobs …                         # outputs do tofu
-nas config set nuvem.fila_mac …
+nas config set nuvem.fila_eventos …
 ```
 
 Para testar o worker sem fila: `nas worker --processar bibliotecas/…/x.mkv`
 (com `NAS_BUCKET`/`NAS_REGIAO`, e `NAS_ENDPOINT` para MinIO).
 
-Ainda não existe (fases seguintes do plano): instância cloud do Ozymandias e
-bursting do Mac para os workers.
+**Instância cloud (V4).** Um Ozymandias que fica no ar com o Mac dormindo:
+`nas serve --nuvem`, numa task Fargate Spot de 0,5 vCPU com um sidecar do
+Tailscale. O endereço é `https://ozymandias-nuvem.<tailnet>.ts.net`, gratuito,
+com HTTPS e sem porta de entrada na AWS; com `funnel = true` ele fica público
+para uma TV sem o app. O SQLite é replicado continuamente para
+`estado/nuvem/` pelo Litestream e restaurado se a task Spot for trocada.
+
+Ela mostra o acervo inteiro, toca o que tem cópia no bucket, recebe envios e
+registra progresso e favoritos. O que só existe no disco do Mac aparece como
+"no Mac, indisponível", o espelho do "na nuvem, indisponível" do modo local.
+Scan, contas, senhas, bibliotecas e o kill switch continuam sendo do Mac: a
+instância recusa essas rotas.
+
+Como os dois lados se falam (nenhum lê o banco do outro):
+
+- **Snapshot.** A cada sincronização em que algo mudou, o Mac grava
+  `catalogo/snapshots/mac.json.gz` (bibliotecas, usuários com o hash argon2id,
+  títulos com metadados, itens, faixas, progresso, favoritos) e os pôsteres em
+  `catalogo/posters/`. A instância aplica de forma idempotente, com os mesmos
+  IDs de usuário e biblioteca; o que sumiu do Mac some dela. Trocar a senha no
+  Mac derruba as sessões lá também.
+- **Eventos.** Progresso, favoritos e uploads viajam pelo tópico `catalogo`
+  nos dois sentidos, marcados com a origem (`mac`, `nuvem`, `worker`); cada
+  assinatura filtra os próprios eventos. Progresso é last-writer-wins; cada
+  evento tem `event_id` e o repetido é ignorado. Como os IDs de arquivo
+  diferem entre os nós, os eventos apontam para a chave no bucket ou o caminho
+  no Mac.
+- **Upload com o Mac dormindo.** A instância anuncia `item.adicionado`; o
+  worker gera os derivados; o Mac importa quando acordar (os eventos esperam
+  14 dias).
+
+Para subir: crie uma auth key do Tailscale reutilizável, efêmera e com a tag
+`tag:ozymandias` (declare a tag na ACL da tailnet), passe como
+`tailscale_authkey` no `terraform.tfvars` e rode `tofu apply`. Sem a key, a
+instância cloud simplesmente não é criada. Alarmes por e-mail: eventos na DLQ
+e instância fora do ar por 10 minutos.
+
+Ainda não existe (fase seguinte do plano): bursting do Mac para os workers.
 
 ## Limitações conhecidas
 

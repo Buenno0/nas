@@ -21,7 +21,8 @@ output "configurar_nas" {
     nas config set nuvem.cdn_chave_id ${aws_cloudfront_public_key.cdn.id}
     nas config set nuvem.cdn_parametro ${aws_ssm_parameter.chave_cdn.name}
     nas config set nuvem.fila_jobs ${aws_sqs_queue.jobs.url}
-    nas config set nuvem.fila_mac ${aws_sqs_queue.mac.url}
+    nas config set nuvem.fila_eventos ${aws_sqs_queue.mac.url}
+    nas config set nuvem.topico_catalogo ${aws_sns_topic.catalogo.arn}
     nas modo hibrido
   EOT
 }

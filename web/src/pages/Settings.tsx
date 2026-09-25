@@ -12,6 +12,7 @@ import { humanSize } from '../lib/format'
 export function Settings() {
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.me })
   const admin = user?.is_admin ?? false
+  const naNuvem = useModoNuvem()?.papel === 'nuvem'
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
@@ -28,13 +29,20 @@ export function Settings() {
 
       {/* As seções de servidor só existem para o admin — e a API recusa
           essas rotas para os demais, então esconder aqui é só cortesia. */}
-      {admin && <NuvemCard />}
+      {naNuvem && <InstanciaCloudCard />}
+      {admin && !naNuvem && <NuvemCard />}
       {admin && <UploadCard />}
       {admin && <SincronizacaoCard />}
-      {admin && <LibrariesCard />}
-      {admin && <MetadataCard />}
+      {admin && !naNuvem && <LibrariesCard />}
+      {admin && !naNuvem && <MetadataCard />}
       <AppearanceCard />
-      <PasswordCard />
+      {naNuvem ? (
+        <Card title="Senha" description="Contas e senhas são do Mac: troque por lá, e a mudança chega aqui no próximo sincronismo." >
+          <p className="text-xs text-muted">Esta é a instância cloud.</p>
+        </Card>
+      ) : (
+        <PasswordCard />
+      )}
     </div>
   )
 }
@@ -46,6 +54,19 @@ function Card({ title, description, children }: { title: string; description?: s
       {description && <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>}
       <div className="mt-4">{children}</div>
     </section>
+  )
+}
+
+function InstanciaCloudCard() {
+  return (
+    <Card
+      title="Instância cloud"
+      description="Você está no Ozymandias da nuvem, que fica no ar com o Mac dormindo. Ele mostra o acervo inteiro, toca o que tem cópia no bucket e recebe envios; o que só existe no Mac aparece como indisponível. Bibliotecas, contas e metadados vêm do Mac."
+    >
+      <p className="inline-flex items-center gap-2 rounded-lg bg-accent/15 px-3 py-1.5 text-sm font-semibold text-accent">
+        <CloudIcon /> Nuvem
+      </p>
+    </Card>
   )
 }
 

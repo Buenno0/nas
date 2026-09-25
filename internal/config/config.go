@@ -63,11 +63,29 @@ type Nuvem struct {
 	CDNChaveID   string `json:"cdn_chave_id,omitempty"`
 	CDNParametro string `json:"cdn_parametro,omitempty"`
 
-	// V3: FilaJobs recebe pedidos de processamento (URL da fila SQS);
-	// FilaMac é a assinatura do Mac no tópico catalogo, de onde chegam os
-	// job.concluido. Vazias = sem processamento na nuvem.
-	FilaJobs string `json:"fila_jobs,omitempty"`
-	FilaMac  string `json:"fila_mac,omitempty"`
+	// V3/V4: FilaJobs recebe pedidos de processamento (URL da fila SQS).
+	// FilaEventos é a assinatura DESTE nó no tópico catalogo (no-mac no Mac,
+	// no-cloud na instância cloud). Topico é o ARN do catalogo, onde este nó
+	// publica o que muda aqui.
+	FilaJobs    string `json:"fila_jobs,omitempty"`
+	FilaEventos string `json:"fila_eventos,omitempty"`
+	Topico      string `json:"topico_catalogo,omitempty"`
+
+	// Papel não é gravado: "mac" (padrão) ou "nuvem" (nas serve --nuvem).
+	Papel string `json:"-"`
+}
+
+const (
+	PapelMac   = "mac"
+	PapelNuvem = "nuvem"
+)
+
+// OrigemDosEventos é o nome deste nó nos eventos que ele publica.
+func (n Nuvem) OrigemDosEventos() string {
+	if n.Papel == PapelNuvem {
+		return PapelNuvem
+	}
+	return PapelMac
 }
 
 // CDN diz se a leitura deve passar pelo CloudFront.

@@ -62,6 +62,11 @@ func (s *Scanner) IndexarNuvem(ctx context.Context, lib db.Library, key, rel str
 	if _, _, err := s.attachTitle(ctx, lib, f, id, map[string]int64{}); err != nil {
 		return id, err
 	}
+	// Quem não recebeu este upload (o Mac, se foi feito na instância cloud)
+	// importa pela chave.
+	s.db.RegistraEvento(ctx, "item.adicionado", map[string]any{
+		"key": key, "library_id": lib.ID, "rel": f.rel, "tamanho": tamanho,
+	})
 	return id, nil
 }
 

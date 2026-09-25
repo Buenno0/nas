@@ -31,7 +31,21 @@ type Mensageria interface {
 	// EstenderVisibilidade segura a mensagem enquanto um job longo roda,
 	// para outra réplica não pegá-la no meio.
 	EstenderVisibilidade(ctx context.Context, fila, recibo string, d time.Duration) error
-	Publicar(ctx context.Context, topico string, corpo []byte) error
+	// Publicar marca a mensagem com a origem: cada nó assina o tópico com um
+	// filtro que descarta os próprios eventos.
+	Publicar(ctx context.Context, topico string, corpo []byte, origem string) error
+}
+
+// EventoFederado é o envelope de um evento do outbox publicado no catalogo.
+// event_id é único por nó e evento: a entrega é at-least-once, e quem recebe
+// descarta o repetido.
+type EventoFederado struct {
+	SchemaVersion int             `json:"schema_version"`
+	EventID       string          `json:"event_id"`
+	Origem        string          `json:"origem"`
+	Tipo          string          `json:"tipo"`
+	Payload       json.RawMessage `json:"payload"`
+	CriadoMs      int64           `json:"criado_ms"`
 }
 
 // Job pede o processamento de um objeto do bucket.

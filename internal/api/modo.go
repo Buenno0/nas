@@ -14,8 +14,17 @@ import (
 // Nuvem expõe o kill switch para a CLI (SIGHUP recarrega o modo).
 func (s *Server) Nuvem() *cloud.Chave { return s.nuvem }
 
+// estadoModo é o Estado da chave mais o papel deste nó, que a interface usa
+// para decidir o que é "indisponível" (na nuvem, no Mac).
+type estadoModo struct {
+	cloud.Estado
+	Papel string `json:"papel"`
+}
+
+func (s *Server) estadoModo() estadoModo { return estadoModo{s.nuvem.Estado(), s.papel()} }
+
 func (s *Server) handleGetModo(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.nuvem.Estado())
+	writeJSON(w, http.StatusOK, s.estadoModo())
 }
 
 // handlePutModo alterna o modo e grava no config.json, para sobreviver a
@@ -36,7 +45,7 @@ func (s *Server) handlePutModo(w http.ResponseWriter, r *http.Request) {
 		// O contexto do servidor, não o da requisição: fechar a aba não deve
 		// deixar a transição pela metade.
 		if err := s.nuvem.Ativar(s.fundo); err != nil {
-			writeJSON(w, http.StatusBadGateway, s.nuvem.Estado())
+			writeJSON(w, http.StatusBadGateway, s.estadoModo())
 			return
 		}
 	default:
@@ -47,7 +56,7 @@ func (s *Server) handlePutModo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, s.nuvem.Estado())
+	writeJSON(w, http.StatusOK, s.estadoModo())
 }
 
 func (s *Server) gravaModo(modo string) error {
@@ -99,7 +108,7 @@ func (s *Server) handleModoEvents(w http.ResponseWriter, r *http.Request) {
 	defer sair()
 
 	envia := func(e cloud.Estado) {
-		if payload, err := json.Marshal(e); err == nil {
+		if payload, err := json.Marshal(estadoModo{e, s.papel()}); err == nil {
 			fmt.Fprintf(w, "data: %s\n\n", payload)
 			flusher.Flush()
 		}

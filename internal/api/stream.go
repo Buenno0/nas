@@ -55,6 +55,10 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		s.streamDaNuvem(w, r, file)
 		return
 	}
+	if s.opts.NaNuvem {
+		writeError(w, http.StatusServiceUnavailable, "no Mac, indisponível na nuvem")
+		return
+	}
 
 	f, err := os.Open(file.Path)
 	if err != nil {
@@ -152,7 +156,9 @@ func (s *Server) handleFileThumb(w http.ResponseWriter, r *http.Request) {
 	// Item da nuvem: a chave do cache é o caminho estável, e a leitura sai de
 	// uma URL assinada. No modo local, só o que já estiver em cache aparece.
 	ctx, origem := r.Context(), file.Path
-	if db.SoNaNuvem(file.Localizacao) {
+	if s.opts.NaNuvem && !db.SoNaNuvem(file.Localizacao) {
+		origem = "" // só no Mac: aqui, só o que já estiver em cache
+	} else if db.SoNaNuvem(file.Localizacao) {
 		arm, vida, ok := s.nuvem.Hibrido()
 		if ok {
 			// A imagem pronta do worker é um JPEG de KB; o original pode ser

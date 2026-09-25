@@ -502,9 +502,16 @@ func (m *Motor) reconciliarUmaVez(ctx context.Context) {
 		}
 	}
 	passo("catálogo", m.importarDoBucket(nctx, arm))
-	passo("retomadas", m.retomar(nctx))
-	passo("espelho", m.espelhar(nctx))
-	// Por último: a importação acima também gera eventos.
+	if m.papelNuvem() {
+		// A instância cloud não tem disco de mídia: nada a retomar nem a
+		// espelhar. O estado do Mac chega pelo snapshot.
+		passo("snapshot", m.carregarSnapshot(nctx, arm))
+	} else {
+		passo("retomadas", m.retomar(nctx))
+		passo("espelho", m.espelhar(nctx))
+		passo("snapshot", m.publicarSnapshot(nctx, arm))
+	}
+	// Por último: os passos acima também geram eventos.
 	passo("journal", m.drenarOutbox(nctx, arm))
 
 	if nctx.Err() != nil {
@@ -537,13 +544,16 @@ func (m *Motor) drenarOutbox(ctx context.Context, arm cloud.Armazenamento) error
 		var b strings.Builder
 		enc := json.NewEncoder(&b)
 		for _, e := range evs {
-			if err := enc.Encode(linhaDoJournal{SchemaVersion: db.VersaoDosEventos, Origem: "mac",
+			if err := enc.Encode(linhaDoJournal{SchemaVersion: db.VersaoDosEventos, Origem: m.cfg().OrigemDosEventos(),
 				ID: e.ID, Tipo: e.Tipo, Payload: e.Payload, Criado: e.Criado}); err != nil {
 				return err
 			}
 		}
-		key := fmt.Sprintf("eventos/mac/%020d.jsonl", evs[0].ID)
+		key := fmt.Sprintf("eventos/%s/%020d.jsonl", m.cfg().OrigemDosEventos(), evs[0].ID)
 		if err := arm.Gravar(ctx, key, []byte(b.String()), "application/x-ndjson"); err != nil {
+			return err
+		}
+		if err := m.publicarEventos(ctx, arm, evs); err != nil {
 			return err
 		}
 		ultimo := evs[len(evs)-1].ID

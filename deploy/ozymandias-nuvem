@@ -1,0 +1,8 @@
+#!/bin/sh
+# Entrada da instância cloud: restaura o banco do bucket (se houver réplica e
+# ainda não houver banco local) e sobe o Ozymandias embrulhado pelo Litestream,
+# que replica cada escrita para o S3.
+set -eu
+mkdir -p /trabalho/.nas
+litestream restore -config /etc/litestream.yml -if-db-not-exists -if-replica-exists /trabalho/.nas/nas.db
+exec litestream replicate -config /etc/litestream.yml -exec "nas serve --nuvem"

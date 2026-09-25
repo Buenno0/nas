@@ -11,7 +11,7 @@ variable "bucket" {
 variable "origens_web" {
   description = "Origens que podem enviar direto ao bucket (CORS do upload do navegador). Ex.: http://macbook.local:8787, https://*.trycloudflare.com"
   type        = list(string)
-  default     = ["http://localhost:8787"]
+  default     = ["http://localhost:8787", "https://*.ts.net"]
 }
 
 variable "ca_pem" {
@@ -45,4 +45,17 @@ variable "imagem_tag" {
   description = "Tag da imagem do worker no ECR."
   type        = string
   default     = "latest"
+}
+
+variable "tailscale_authkey" {
+  description = "Auth key do Tailscale para a instância cloud: reutilizável, efêmera, com tag (tag:ozymandias). Vai para o SSM como SecureString."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "funnel" {
+  description = "Expor a instância cloud publicamente pelo Tailscale Funnel (para TV sem o app). Sem ele, só a sua tailnet acessa."
+  type        = bool
+  default     = false
 }

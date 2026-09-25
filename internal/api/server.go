@@ -31,6 +31,9 @@ type Options struct {
 	// Nuvem é o kill switch do modo híbrido. Nil vira uma chave travada em
 	// LOCAL, que é exatamente o Ozymandias de antes do híbrido.
 	Nuvem *cloud.Chave
+	// NaNuvem: esta é a instância cloud (nas serve --nuvem). Ela não tem
+	// disco de mídia nem é dona de usuários; o que só o Mac faz é recusado.
+	NaNuvem bool
 }
 
 // Server agrupa as dependências dos handlers.
@@ -131,7 +134,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	// Protegido.
 	mux.Handle("GET /api/auth/me", s.protected(s.handleMe))
-	mux.Handle("POST /api/auth/password", s.protected(s.handleChangePassword))
+	mux.Handle("POST /api/auth/password", s.soNoMac(s.protected(s.handleChangePassword)))
 	mux.Handle("POST /api/auth/device/approve", s.protected(s.handleDeviceApprove))
 	// Credencial curta para os players que só sabem abrir uma URL.
 	mux.Handle("POST /api/auth/media-token", s.protected(s.handleMediaToken))
@@ -151,8 +154,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// Ver o andamento é de todos; disparar trabalho no servidor é do admin.
 	mux.Handle("GET /api/scan/status", s.protected(s.handleScanStatus))
 	mux.Handle("GET /api/scan/events", s.protected(s.handleScanEvents))
-	mux.Handle("POST /api/scan", s.adminOnly(s.handleScanStart))
-	mux.Handle("POST /api/metadata", s.adminOnly(s.handleMetadataStart))
+	mux.Handle("POST /api/scan", s.soNoMac(s.adminOnly(s.handleScanStart)))
+	mux.Handle("POST /api/metadata", s.soNoMac(s.adminOnly(s.handleMetadataStart)))
 
 	// Telemetria do servidor: só o administrador.
 	mux.Handle("GET /api/metrics/status", s.adminOnly(s.handleMetricsStatus))
@@ -172,7 +175,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// Modo de nuvem: ver é de todos (a interface mostra o selo), alternar é do
 	// admin. O kill switch é o PUT com "local".
 	mux.Handle("GET /api/modo", s.protected(s.handleGetModo))
-	mux.Handle("PUT /api/modo", s.adminOnly(s.handlePutModo))
+	mux.Handle("PUT /api/modo", s.soNoMac(s.adminOnly(s.handlePutModo)))
 	mux.Handle("GET /api/modo/events", s.protected(s.handleModoEvents))
 
 	// Upload direto para o bucket: o navegador envia as partes ao S3 com URLs
@@ -188,11 +191,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// destrutivas (liberar, remover) só nascem daqui, nunca de um evento.
 	mux.Handle("GET /api/sincronizacao", s.adminOnly(s.handleSincronizacao))
 	mux.Handle("POST /api/sincronizacao", s.adminOnly(s.handleReconciliar))
-	mux.Handle("POST /api/files/{id}/nuvem/{acao}", s.adminOnly(s.handleAcaoDeNuvem))
-	mux.Handle("PUT /api/libraries/{id}/espelhada", s.adminOnly(s.handleEspelhada))
+	mux.Handle("POST /api/files/{id}/nuvem/{acao}", s.soNoMac(s.adminOnly(s.handleAcaoDeNuvem)))
+	mux.Handle("PUT /api/libraries/{id}/espelhada", s.soNoMac(s.adminOnly(s.handleEspelhada)))
 
 	mux.Handle("GET /api/settings", s.protected(s.handleGetSettings))
-	mux.Handle("PUT /api/settings", s.adminOnly(s.handlePutSettings))
+	mux.Handle("PUT /api/settings", s.soNoMac(s.adminOnly(s.handlePutSettings)))
 
 	// Corrigir a capa de um título melhora o acervo para todo mundo, então
 	// qualquer conta pode fazer.
@@ -223,6 +226,17 @@ func (s *Server) routes(mux *http.ServeMux) {
 	}
 }
 
+// soNoMac recusa, na instância cloud, o que só o Mac pode fazer: ele é o dono
+// de usuários, bibliotecas e disco, e o snapshot seguinte desfaria a mudança.
+func (s *Server) soNoMac(h http.Handler) http.Handler {
+	if !s.opts.NaNuvem {
+		return h
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, http.StatusConflict, "isto só se faz no Mac; a instância cloud recebe pelo snapshot")
+	})
+}
+
 // protected embrulha um handler com a exigência de sessão válida.
 func (s *Server) protected(h http.HandlerFunc) http.Handler {
 	return s.auth.Require(h)
@@ -245,7 +259,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"time":        time.Now().Format(time.RFC3339),
 		"api_version": 2,
 		"features":    []string{"device_pairing", "playback_caps_v2"},
+		"papel":       s.papel(),
 	})
+}
+
+func (s *Server) papel() string {
+	if s.opts.NaNuvem {
+		return "nuvem"
+	}
+	return "mac"
 }
 
 // Serve sobe o servidor em addr e desliga graciosamente quando ctx é cancelado.
