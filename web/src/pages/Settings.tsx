@@ -177,12 +177,16 @@ interface Envio {
   enviados: number
   estado: 'enviando' | 'pausado' | 'pronto' | 'erro'
   erro?: string
+  /** Envios soltos juntos (ou enquanto outros ainda sobem) formam um lote:
+   *  é a unidade da nuvem que cresce e do raio no fim. */
+  lote: number
 }
 
-/** O lote inteiro numa nuvem só: o progresso somado dos envios que não
- *  falharam. O raio cai quando o último termina. */
+/** O lote mais recente numa nuvem só: o progresso somado dos envios dele que
+ *  não falharam. O raio cai quando o último termina. */
 function LoteDeEnvio({ envios }: { envios: Envio[] }) {
-  const lote = envios.filter((e) => e.estado !== 'erro')
+  const ultimo = envios.reduce((n, e) => Math.max(n, e.lote), 0)
+  const lote = envios.filter((e) => e.lote === ultimo && e.estado !== 'erro')
   const total = lote.reduce((n, e) => n + e.arquivo.size, 0)
   const feito = lote.reduce((n, e) => n + (e.estado === 'pronto' ? e.arquivo.size : e.enviados), 0)
   const ativo = lote.some((e) => e.estado === 'enviando')
@@ -247,11 +251,17 @@ function UploadCard() {
 
   const adiciona = (arquivos: FileList | null) => {
     if (!arquivos || !destino) return
+    // Nada subindo = lote novo; com algo em curso, os novos entram no mesmo.
+    const atual = enviosRef.current
+    const ultimo = atual.reduce((n, e) => Math.max(n, e.lote), 0)
+    const emCurso = atual.some((e) => e.estado === 'enviando' || e.estado === 'pausado')
+    const lote = emCurso ? ultimo : ultimo + 1
     const novos = [...arquivos].map<Envio>((arquivo) => ({
       chave: `${arquivo.name}-${arquivo.size}-${Math.random()}`,
       arquivo,
       enviados: 0,
       estado: hibridoRef.current ? 'enviando' : 'pausado',
+      lote,
     }))
     setEnvios((lista) => [...novos, ...lista])
     if (hibridoRef.current) for (const e of novos) void roda(e)
