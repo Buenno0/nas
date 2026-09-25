@@ -42,7 +42,7 @@ var receitas = map[string]receita{
 		nome: "recodificar a imagem em H.264 até 1080p",
 		args: func(origem, destino string, audio int) []string {
 			return append(comuns(origem, audio),
-				"-c:v", "h264_videotoolbox",
+				"-c:v", EncoderDeVideo(),
 				"-b:v", "4M", "-maxrate", "6M", "-bufsize", "8M",
 				"-profile:v", "high",
 				// scale só reduz; vídeo menor que 1080p não é ampliado.

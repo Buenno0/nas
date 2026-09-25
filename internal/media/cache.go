@@ -116,13 +116,6 @@ func (p *Preparador) inventario() ([]entradaCache, int64) {
 	return entradas, total
 }
 
-func atime(info os.FileInfo) int64 {
-	if st, ok := info.Sys().(*syscall.Stat_t); ok {
-		return st.Atimespec.Sec
-	}
-	return info.ModTime().Unix()
-}
-
 // LimparParciais roda no boot: um preparo interrompido pela queda do servidor
 // deixa um temporário que ninguém mais vai terminar.
 func (p *Preparador) LimparParciais() {

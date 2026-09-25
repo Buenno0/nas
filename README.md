@@ -5,9 +5,10 @@ dele. Roda de qualquer pasta, indexa as suas pastas de filmes, séries, músicas
 e fotos, e serve tudo numa interface estilo streaming — escura por padrão,
 clara se você quiser.
 
-Dois modos de acesso, **um por vez**:
+Dois modos de acesso à rede, **um por vez** (não confundir com o modo de nuvem
+local/híbrido descrito em `PLANO-HIBRIDO.md`; os dois eixos são independentes):
 
-1. **Local** — acessível na sua rede (`http://192.168.x.x:8787`)
+1. **LAN** (`--local`) — acessível na sua rede (`http://192.168.x.x:8787`)
 2. **Tunnel** — acessível pela internet via Cloudflare
 
 ## Instalação
@@ -51,11 +52,11 @@ No primeiro boot, o NAS cria o seu usuário e mostra uma senha aleatória no
 terminal. Anote: ela não aparece de novo.
 
 Ao iniciar, o endereço compartilhável é copiado automaticamente para a área
-de transferência e aparece também como QR Code no terminal. No modo local, o QR
+de transferência e aparece também como QR Code no terminal. No acesso LAN, o QR
 aponta para o IP da rede; no quick tunnel, ele é atualizado assim que o domínio
 `*.trycloudflare.com` fica disponível.
 
-No modo local o servidor também anuncia `_ozymandias._tcp.local` por DNS-SD.
+No acesso LAN o servidor também anuncia `_ozymandias._tcp.local` por DNS-SD.
 Clientes de TV encontram nome, porta e versão da API sem exigir que o usuário
 digite o IP, mesmo quando o roteador atribui outro endereço ao computador.
 
@@ -64,7 +65,7 @@ digite o IP, mesmo quando o roteador atribui outro endereço ao computador.
 | Comando | O que faz |
 |---|---|
 | `nas` | menu interativo |
-| `nas serve --local` | sobe direto no modo local |
+| `nas serve --local` | sobe direto no acesso LAN |
 | `nas serve --tunnel` | sobe com tunnel Cloudflare |
 | `nas lib add <pasta>` | cadastra uma biblioteca (`--kind movie\|tv\|music\|photo`) |
 | `nas lib ls` / `nas lib rm <id>` | lista / remove bibliotecas do índice |
@@ -107,7 +108,7 @@ TMDB e deixa você escolher o item certo.
 
 ### Tunnel
 
-O modo tunnel usa o `cloudflared`. Sem configuração nenhuma, ele abre um
+O acesso Tunnel usa o `cloudflared`. Sem configuração nenhuma, ele abre um
 *quick tunnel* e imprime uma URL `*.trycloudflare.com` — que muda a cada
 execução. A URL é copiada automaticamente e o terminal mostra um QR Code
 pronto para leitura pelo celular. Para uma URL fixa no seu domínio:
@@ -119,7 +120,7 @@ nas config set tunnel nas
 nas serve --tunnel
 ```
 
-No modo tunnel o servidor escuta só em `127.0.0.1` (o cloudflared é a única
+No acesso Tunnel o servidor escuta só em `127.0.0.1` (o cloudflared é a única
 entrada) e o cookie de sessão vai com `Secure`.
 
 ### Compressão dos assets
