@@ -457,3 +457,37 @@ func TestAplicarEventoDoCatalogo(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Apagar um objeto direto no bucket (console, CLI): o item só da nuvem sai do
+// catálogo, o que também está no Mac volta a ser só local, e o que continua
+// no bucket fica intacto.
+func TestApagadoPorForaDoBucket(t *testing.T) {
+	a := montar(t)
+	ctx := context.Background()
+	arm, _, _ := a.chave.Hibrido()
+	grava := func(key string) {
+		if err := arm.Gravar(ctx, key, []byte("x"), ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	soNuvem := a.arquivoLocal(t, "Solaris (1972).mkv", 100)
+	a.db.MarcaNaNuvem(ctx, soNuvem.ID, db.LocalNuvem, "bibliotecas/1/a/Solaris (1972).mkv")
+	ambos := a.arquivoLocal(t, "Stalker (1979).mkv", 100)
+	a.db.MarcaNaNuvem(ctx, ambos.ID, db.LocalAmbos, "bibliotecas/1/b/Stalker (1979).mkv")
+	fica := a.arquivoLocal(t, "Espelho (1975).mkv", 100)
+	a.db.MarcaNaNuvem(ctx, fica.ID, db.LocalNuvem, "bibliotecas/1/c/Espelho (1975).mkv")
+	grava("bibliotecas/1/c/Espelho (1975).mkv") // só este continua no bucket
+
+	a.motor.Reconciliar(ctx)
+
+	if _, err := a.db.FileByID(ctx, soNuvem.ID); err == nil {
+		t.Fatal("item só da nuvem apagado do bucket continuou no catálogo")
+	}
+	if f := a.loc(t, ambos.ID); f.Localizacao != db.LocalLocal || f.NuvemKey != "" {
+		t.Fatalf("item com cópia no Mac: %s %q, quero local", f.Localizacao, f.NuvemKey)
+	}
+	if f := a.loc(t, fica.ID); f.Localizacao != db.LocalNuvem {
+		t.Fatalf("item que continua no bucket mudou para %s", f.Localizacao)
+	}
+}

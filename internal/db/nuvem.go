@@ -359,3 +359,40 @@ func (d *DB) MudaCaminho(ctx context.Context, fileID int64, path, localizacao, h
 		 WHERE id = ?`, path, localizacao, hash, mtime, fileID)
 	return err
 }
+
+// ArquivoComChave é um item do catálogo que tem (ou deveria ter) cópia no bucket.
+type ArquivoComChave struct {
+	ID          int64
+	LibraryID   int64
+	Key         string
+	Localizacao string
+}
+
+func (d *DB) ArquivosComChave(ctx context.Context) ([]ArquivoComChave, error) {
+	rows, err := d.QueryContext(ctx, `
+		SELECT id, library_id, nuvem_key, localizacao FROM media_files WHERE nuvem_key != ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ArquivoComChave
+	for rows.Next() {
+		var a ArquivoComChave
+		if err := rows.Scan(&a.ID, &a.LibraryID, &a.Key, &a.Localizacao); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ApagaSoDaNuvem tira do catálogo um item cuja única cópia era o bucket e
+// que sumiu de lá. Nunca toca num item com cópia no disco.
+func (d *DB) ApagaSoDaNuvem(ctx context.Context, id int64) (bool, error) {
+	res, err := d.ExecContext(ctx, `DELETE FROM media_files WHERE id = ? AND localizacao = 'nuvem'`, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}

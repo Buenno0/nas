@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -603,7 +604,9 @@ func (m *Motor) importarDoBucket(ctx context.Context, arm cloud.Armazenamento) e
 		libs[l.ID] = l
 	}
 	sc := scan.New(m.db)
-	return arm.Listar(ctx, "bibliotecas/", func(o cloud.Objeto) error {
+	vistas := map[string]bool{}
+	err = arm.Listar(ctx, "bibliotecas/", func(o cloud.Objeto) error {
+		vistas[o.Key] = true
 		if conhecidas[o.Key] {
 			return nil
 		}
@@ -624,6 +627,54 @@ func (m *Motor) importarDoBucket(ctx context.Context, arm cloud.Armazenamento) e
 		}
 		return nil
 	})
+	if err != nil {
+		return err // listagem pela metade: não dá para concluir que algo sumiu
+	}
+	return m.esquecerSumidos(ctx, arm, vistas)
+}
+
+// esquecerSumidos trata o que foi apagado do bucket por fora (console, CLI):
+// o que só existia lá sai do catálogo; o que também está no Mac volta a ser
+// só local. Cada ausência é confirmada com um HEAD antes, para uma listagem
+// atrasada não apagar nada que ainda existe.
+func (m *Motor) esquecerSumidos(ctx context.Context, arm cloud.Armazenamento, vistas map[string]bool) error {
+	itens, err := m.db.ArquivosComChave(ctx)
+	if err != nil {
+		return err
+	}
+	libs := map[int64]bool{}
+	for _, a := range itens {
+		if vistas[a.Key] || (a.Localizacao != db.LocalNuvem && a.Localizacao != db.LocalAmbos) {
+			continue
+		}
+		if _, err := arm.Info(ctx, a.Key); !errors.Is(err, cloud.ErrNaoExiste) {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		nome := path.Base(a.Key)
+		if a.Localizacao == db.LocalAmbos {
+			if err := m.db.MarcaNaNuvem(ctx, a.ID, db.LocalLocal, ""); err != nil {
+				return err
+			}
+			m.db.Anota(ctx, "bucket.sumiu", 0, a.ID, nome, map[string]any{"key": a.Key, "agora": "só no Mac"})
+			continue
+		}
+		if ok, err := m.db.ApagaSoDaNuvem(ctx, a.ID); err != nil {
+			return err
+		} else if ok {
+			libs[a.LibraryID] = true
+			m.db.Anota(ctx, "bucket.sumiu", 0, a.ID, nome, map[string]any{"key": a.Key, "agora": "fora do catálogo"})
+			log.Printf("%s foi apagado do bucket: saiu do catálogo", nome)
+		}
+	}
+	for lib := range libs {
+		if _, err := m.db.PruneEmptyTitles(ctx, lib); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // retomar reabre o que o kill switch (ou uma queda) interrompeu.
