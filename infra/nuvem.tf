@@ -71,6 +71,20 @@ resource "aws_iam_role_policy" "nuvem" {
         Resource = "arn:aws:ecs:${var.regiao}:${data.aws_caller_identity.atual.account_id}:service/${aws_ecs_cluster.ozymandias.name}/ozymandias-worker"
       },
       {
+        # Tela técnica da instância cloud: só leitura de configuração.
+        Sid      = "InspecionarBucket"
+        Effect   = "Allow"
+        Action   = ["s3:GetBucketVersioning", "s3:GetLifecycleConfiguration", "s3:GetBucketCORS"]
+        Resource = aws_s3_bucket.midia.arn
+      },
+      {
+        Sid    = "InspecionarFilas"
+        Effect = "Allow"
+        Action = ["sqs:GetQueueAttributes"]
+        Resource = [aws_sqs_queue.jobs.arn, aws_sqs_queue.jobs_dlq.arn,
+        aws_sqs_queue.nuvem.arn, aws_sqs_queue.nuvem_dlq.arn]
+      },
+      {
         # Painel de custo também na tela técnica da instância cloud.
         Sid      = "LerCustos"
         Effect   = "Allow"
