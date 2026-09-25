@@ -150,7 +150,7 @@ resource "aws_cloudwatch_log_group" "worker" {
 resource "aws_iam_role" "execucao" {
   name = "ozymandias-worker-execucao"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
@@ -165,7 +165,7 @@ resource "aws_iam_role_policy_attachment" "execucao" {
 resource "aws_iam_role" "worker" {
   name = "ozymandias-worker"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }

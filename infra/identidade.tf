@@ -98,8 +98,8 @@ resource "aws_iam_role_policy" "mac" {
 }
 
 resource "aws_rolesanywhere_profile" "mac" {
-  name           = "ozymandias-mac"
-  enabled        = true
-  role_arns      = [aws_iam_role.mac.arn]
+  name             = "ozymandias-mac"
+  enabled          = true
+  role_arns        = [aws_iam_role.mac.arn]
   duration_seconds = 3600
 }

@@ -11,6 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+
 	"nas/internal/cloud"
 	"nas/internal/config"
 )
@@ -31,6 +35,7 @@ func TestS3MultipartDePontaAPonta(t *testing.T) {
 	cfg := config.Nuvem{Regiao: "us-east-1", Bucket: bucket, Endpoint: endpoint, PathStyle: true}
 	chave := cloud.Nova(func() config.Nuvem { return cfg }, false)
 	ctx := context.Background()
+	criarBucketSeFaltar(t, ctx, cfg)
 	if err := chave.Ativar(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -106,5 +111,26 @@ func TestS3MultipartDePontaAPonta(t *testing.T) {
 	}
 	if chave.Bloqueadas() == 0 {
 		t.Fatal("nuvem_bloqueadas_total não contou a tentativa")
+	}
+}
+
+// criarBucketSeFaltar dispensa o cliente mc: num MinIO recém-subido, o bucket
+// de teste ainda não existe. O adapter do Ozymandias nunca cria bucket (isso é
+// do OpenTofu), então o teste fala com o SDK direto.
+func criarBucketSeFaltar(t *testing.T, ctx context.Context, cfg config.Nuvem) {
+	t.Helper()
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Regiao))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(cfg.Endpoint)
+		o.UsePathStyle = true
+	})
+	if _, err := c.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &cfg.Bucket}); err == nil {
+		return
+	}
+	if _, err := c.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: &cfg.Bucket}); err != nil {
+		t.Fatalf("criando o bucket de teste: %v", err)
 	}
 }

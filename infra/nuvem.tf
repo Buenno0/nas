@@ -52,7 +52,7 @@ resource "aws_sns_topic_subscription" "nuvem" {
 resource "aws_iam_role" "nuvem" {
   name = "ozymandias-nuvem"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
@@ -115,8 +115,8 @@ locals {
   # Ozymandias no loopback; Funnel só se pedido. ${TS_CERT_DOMAIN} é trocado
   # pelo próprio containerboot.
   serve_json = jsonencode({
-    TCP = { "443" = { HTTPS = true } }
-    Web = { "$${TS_CERT_DOMAIN}:443" = { Handlers = { "/" = { Proxy = "http://127.0.0.1:8787" } } } }
+    TCP         = { "443" = { HTTPS = true } }
+    Web         = { "$${TS_CERT_DOMAIN}:443" = { Handlers = { "/" = { Proxy = "http://127.0.0.1:8787" } } } }
     AllowFunnel = { "$${TS_CERT_DOMAIN}:443" = var.funnel }
   })
   log = { logDriver = "awslogs", options = {
