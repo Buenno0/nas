@@ -44,13 +44,20 @@ type PedidoLegenda struct {
 	// Indice é o stream dentro do vídeo. Negativo significa arquivo separado:
 	// aí a origem já É a legenda e não há o que mapear.
 	Indice int
+	// Identidade substitui Origem na chave do cache quando a origem é uma URL
+	// assinada, que muda a cada pedido.
+	Identidade string
 }
 
 const versaoDasLegendas = 1
 
 func (p PedidoLegenda) chave() string {
+	id := p.Origem
+	if p.Identidade != "" {
+		id = p.Identidade
+	}
 	return fmt.Sprintf("legenda_v%d_%s.vtt", versaoDasLegendas,
-		hashCurto(fmt.Sprintf("%s|%d|s%d", p.Origem, p.MTime, p.Indice)))
+		hashCurto(fmt.Sprintf("%s|%d|s%d", id, p.MTime, p.Indice)))
 }
 
 // LegendaVTT devolve o caminho de um WebVTT pronto, convertendo na primeira vez.

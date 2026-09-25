@@ -3,7 +3,7 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -s -w -X nas/internal/cli.Version=$(VERSION)
 PREFIX   ?= $(HOME)/.local/bin
 
-.PHONY: help build install uninstall run test fmt vet web comprimir web-dev clean contraste provas
+.PHONY: help build install uninstall run test fmt vet web comprimir web-dev clean contraste provas imagem publicar-imagem
 
 help:
 	@echo "make build      compila bin/$(BINARY)"
@@ -62,3 +62,15 @@ provas:
 
 clean:
 	rm -rf bin web/dist
+
+# --- Worker da nuvem (V3) ---------------------------------------------------
+# ECR_URL vem do output do OpenTofu: tofu -chdir=infra output -raw ecr_url
+VERSAO ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
+imagem:
+	docker buildx build --platform linux/arm64 --build-arg VERSAO=$(VERSAO) -t ozymandias-worker:$(VERSAO) --load .
+
+publicar-imagem:
+	@test -n "$(ECR_URL)" || (echo "defina ECR_URL (tofu -chdir=infra output -raw ecr_url)" && exit 1)
+	aws ecr get-login-password --profile ozymandias-admin | docker login --username AWS --password-stdin $(firstword $(subst /, ,$(ECR_URL)))
+	docker buildx build --platform linux/arm64 --build-arg VERSAO=$(VERSAO) -t $(ECR_URL):$(VERSAO) -t $(ECR_URL):latest --push .

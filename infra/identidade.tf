@@ -63,6 +63,25 @@ resource "aws_iam_role_policy" "mac" {
         Resource = "${aws_s3_bucket.midia.arn}/eventos/mac/*"
       },
       {
+        # Derivados do worker: o Mac só lê (assina URLs para o player).
+        Sid      = "Derivados"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.midia.arn}/derivados/*"
+      },
+      {
+        Sid      = "PedirJobs"
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.jobs.arn
+      },
+      {
+        Sid      = "EventosDoCatalogo"
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility"]
+        Resource = aws_sqs_queue.mac.arn
+      },
+      {
         Sid      = "ChaveDaCDN"
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]

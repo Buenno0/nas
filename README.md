@@ -79,6 +79,7 @@ digite o IP, mesmo quando o roteador atribui outro endereço ao computador.
 | `nas config [set <chave> <valor>]` | mostra ou altera a configuração |
 | `nas modo [local\|hibrido]` | modo de nuvem; `local` é o kill switch |
 | `nas push <arquivo> [--lib N]` | envia ao bucket (modo híbrido) |
+| `nas worker [--uma-vez]` | processador da nuvem (roda no container) |
 | `nas status` / `nas stop` | estado da instância / encerra |
 
 O tipo da biblioteca é inferido pelo nome da pasta quando possível
@@ -711,8 +712,42 @@ privado com OAC) em vez de URL pré-assinada do S3. A chave de assinatura mora
 no SSM e só é lida para a memória ao entrar no híbrido; o kill switch a
 descarta. A chave é gerada pelo OpenTofu, então também fica no tfstate local.
 
-Ainda não existe (fases seguintes do plano): preparo (transcodificação) de
-itens da nuvem, workers em Docker e instância cloud.
+**Processamento na nuvem (V3).** Todo objeto novo em `bibliotecas/` dispara
+um evento do S3 para a fila `ozymandias-jobs`. O `nas worker`, numa imagem
+Docker arm64 no ECS Fargate Spot, consome a fila e gera em
+`derivados/<hash>/`:
+
+- `frame.jpg` (vídeo), `thumb320.jpg`/`thumb800.jpg` (foto), `capa.jpg` (música);
+- `legenda-N.vtt` para cada legenda de texto;
+- `compat.mp4` quando o original não toca num navegador comum (a mesma
+  escolha de receita do Mac, com libx264 no lugar do VideoToolbox);
+- `manifesto.json` com o probe e a lista de derivados.
+
+O worker anuncia `job.concluido` (ou `job.falhou` depois de 3 tentativas; a
+mensagem vai para a DLQ e um alarme manda e-mail) no tópico `catalogo`. O Mac,
+no híbrido, lê a própria fila `ozymandias-no-mac` e grava derivados e
+metadados; um objeto que ele não conhecia entra no catálogo nessa hora. Os
+eventos esperam até 14 dias pelo Mac dormindo.
+
+No player, um item só da nuvem que não toca direto usa o `compat.mp4`; sem
+ele, o Mac pede o job e o player mostra "Preparando na nuvem". Miniaturas e
+legendas desses itens vêm dos derivados, sem ler o vídeo pela rede.
+
+O service fica em **0 réplicas** sem fila e sobe até `workers_max` pela
+profundidade dela (step scaling). Rede na VPC padrão com IP público, sem NAT.
+
+```bash
+make imagem                                              # constrói linux/arm64
+make publicar-imagem ECR_URL=$(tofu -chdir=infra output -raw ecr_url)
+nas config set nuvem.fila_jobs …                         # outputs do tofu
+nas config set nuvem.fila_mac …
+```
+
+Para testar o worker sem fila: `nas worker --processar bibliotecas/…/x.mkv`
+(com `NAS_BUCKET`/`NAS_REGIAO`, e `NAS_ENDPOINT` para MinIO).
+
+Ainda não existe (fases seguintes do plano): instância cloud do Ozymandias e
+bursting do Mac para os workers.
 
 ## Limitações conhecidas
 

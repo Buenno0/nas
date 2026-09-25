@@ -34,3 +34,15 @@ variable "orcamento_usd" {
 variable "email_alerta" {
   type = string
 }
+
+variable "workers_max" {
+  description = "Réplicas máximas do worker. Zero sem fila; sobe com a profundidade."
+  type        = number
+  default     = 3
+}
+
+variable "imagem_tag" {
+  description = "Tag da imagem do worker no ECR."
+  type        = string
+  default     = "latest"
+}

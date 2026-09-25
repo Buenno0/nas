@@ -186,6 +186,27 @@ func (s *Server) handleLegenda(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Item da nuvem: o VTT pronto do worker, ou o vídeo pela URL assinada.
+	if db.SoNaNuvem(arquivo.Localizacao) && faixa.ExtPath == "" {
+		arm, _, ok := s.nuvem.Hibrido()
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, "na nuvem, indisponível no modo local")
+			return
+		}
+		key := arquivo.NuvemKey
+		if d, err := s.db.DerivadoDe(r.Context(), arquivo.ID, "legenda", faixa.Index); err == nil {
+			key, pedido.Indice = d, -1
+		}
+		url, err := arm.URLDeLeitura(r.Context(), key, ttlDeLeitura)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		pedido.Origem = url
+		// A chave do cache não pode depender da URL, que muda a cada assinatura.
+		pedido.Identidade = fmt.Sprintf("%s|%s|s%d", arquivo.Path, key, faixa.Index)
+	}
+
 	caminho, err := s.preparador.LegendaVTT(r.Context(), pedido)
 	if err != nil {
 		var imagem media.ErrLegendaDeImagem

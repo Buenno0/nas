@@ -7,6 +7,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
 	github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign v1.12.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
+	github.com/aws/aws-sdk-go-v2/service/sns v1.47.2
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.52.1
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.78.1
 	github.com/aws/smithy-go v1.28.1
 	github.com/fsnotify/fsnotify v1.10.1

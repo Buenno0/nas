@@ -22,6 +22,7 @@ Uso:
   nas serve [--local|--tunnel] [--port N] [--sem-nuvem]
   nas modo [local|hibrido] modo de nuvem (local = kill switch, zero AWS)
   nas push <arquivo> [--lib N] envia ao bucket (modo híbrido)
+  nas worker [--uma-vez]   processador da nuvem (roda no container da AWS)
   nas lib add <caminho> [--kind movie|tv|music|photo]
   nas lib ls
   nas scan                 indexa os arquivos e busca metadados
@@ -66,6 +67,8 @@ func Run(args []string) int {
 		err = cmdModo(rest)
 	case "push":
 		err = cmdPush(ctx, rest)
+	case "worker":
+		err = cmdWorker(ctx, rest)
 	case "status":
 		err = cmdStatus()
 	case "stop":

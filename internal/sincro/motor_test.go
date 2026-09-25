@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -200,7 +201,7 @@ func montar(t *testing.T) *ambiente {
 	if err := chave.Ativar(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	m := Novo(database, chave, func() int64 { return 0 })
+	m := Novo(database, chave, func() int64 { return 0 }, func() config.Nuvem { return config.Nuvem{} })
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go m.Rodar(ctx)
@@ -398,5 +399,57 @@ func TestKillSwitchPausaERetoma(t *testing.T) {
 	a.esperar(t)
 	if g := a.loc(t, f.ID); g.Localizacao != db.LocalAmbos {
 		t.Fatalf("depois de retomar: %s", g.Localizacao)
+	}
+}
+
+// job.concluido: grava derivados e o probe do manifesto; aceita o envelope
+// do SNS; importa a chave se o Mac ainda não a conhecia.
+func TestAplicarEventoDoCatalogo(t *testing.T) {
+	a := montar(t)
+	ctx := context.Background()
+	key := fmt.Sprintf("bibliotecas/%d/abc/Solaris (1972).mkv", a.lib.ID)
+	a.mem.Gravar(ctx, key, []byte("filme"), "")
+
+	probe, _ := json.Marshal(scan.ProbeResult{Duration: 9000, VCodec: "hevc", Width: 1920, Height: 1080,
+		Streams: []scan.Stream{{Index: 2, Kind: "subtitle", Codec: "subrip", Lang: "por"}}})
+	ev, _ := json.Marshal(cloud.EventoDoCatalogo{SchemaVersion: 1, Tipo: "job.concluido", Key: key,
+		Manifesto: &cloud.Manifesto{SchemaVersion: 1, Key: key, Probe: probe, Derivados: []cloud.Derivado{
+			{Tipo: "compat", Key: cloud.PrefixoDosDerivados(key) + "compat.mp4", Receita: "video1080"},
+			{Tipo: "legenda", Indice: 2, Key: cloud.PrefixoDosDerivados(key) + "legenda-2.vtt"},
+		}}})
+	envelope, _ := json.Marshal(map[string]string{"Type": "Notification", "Message": string(ev)})
+
+	arm, _, _ := a.chave.Hibrido()
+	if err := a.motor.AplicarEvento(ctx, arm, envelope); err != nil {
+		t.Fatal(err)
+	}
+	id, err := a.db.FileIDPorNuvemKey(ctx, key)
+	if err != nil {
+		t.Fatalf("a chave desconhecida não foi importada: %v", err)
+	}
+	if _, err := a.db.DerivadoDe(ctx, id, "compat", 0); err != nil {
+		t.Fatal("derivado compat não gravado")
+	}
+	if _, err := a.db.DerivadoDe(ctx, id, "legenda", 2); err != nil {
+		t.Fatal("derivado de legenda não gravado")
+	}
+	f := a.loc(t, id)
+	if f.Duration != 9000 || f.VCodec != "hevc" {
+		t.Fatalf("probe do manifesto não aplicado: %+v", f)
+	}
+	if estado, _ := a.db.Processamento(ctx, id); estado != "concluido" {
+		t.Fatalf("processamento = %q", estado)
+	}
+
+	falhou, _ := json.Marshal(cloud.EventoDoCatalogo{SchemaVersion: 1, Tipo: "job.falhou", Key: key, Erro: "ffmpeg morreu"})
+	a.motor.AplicarEvento(ctx, arm, falhou)
+	if estado, erro := a.db.Processamento(ctx, id); estado != "falhou" || erro != "ffmpeg morreu" {
+		t.Fatalf("job.falhou: %q %q", estado, erro)
+	}
+
+	// Versão futura do contrato: ignorada, sem erro e sem estrago.
+	futuro, _ := json.Marshal(cloud.EventoDoCatalogo{SchemaVersion: 99, Tipo: "job.falhou", Key: key})
+	if err := a.motor.AplicarEvento(ctx, arm, futuro); err != nil {
+		t.Fatal(err)
 	}
 }

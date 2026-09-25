@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -181,11 +182,24 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, resp)
 			return
 		}
-		if plano.Mode != media.ModeDirect {
-			resp.Motivo = "na nuvem: tentando o original (preparo de itens da nuvem ainda não existe)"
+		if plano.Mode == media.ModeDirect {
+			resp.URL = resp.URLDireta
+			writeJSON(w, http.StatusOK, resp)
+			return
 		}
-		resp.Modo = media.ModeDirect
-		resp.URL = resp.URLDireta
+		// Não toca direto: vale o MP4 compatível que o worker gerou. Sem ele,
+		// o player segue o mesmo fluxo de preparo do Mac, só que quem prepara
+		// é a nuvem.
+		progresso := s.progressoNaNuvem(r.Context(), arquivo)
+		resp.Preparo = &progresso
+		resp.FFmpeg, resp.Ativo = true, s.ConfigNuvem().FilaJobs != ""
+		if progresso.Estado == media.EstadoPronto {
+			resp.URL = resp.URLDireta + "?derivado=compat"
+		} else if !resp.Ativo {
+			// Sem worker configurado: a única chance é o original.
+			resp.Motivo += " · sem processamento na nuvem, tentando o original"
+			resp.Modo, resp.URL, resp.Preparo = media.ModeDirect, resp.URLDireta, nil
+		}
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
@@ -237,7 +251,11 @@ func (s *Server) handlePrepareStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if db.SoNaNuvem(arquivo.Localizacao) {
-		writeError(w, http.StatusConflict, "itens só da nuvem ainda não são preparados")
+		if err := s.sincro.PedirProcessamento(r.Context(), arquivo.ID); err != nil {
+			writeError(w, statusDaSincro(err), err.Error())
+			return
+		}
+		writeJSON(w, http.StatusAccepted, s.progressoNaNuvem(r.Context(), arquivo))
 		return
 	}
 	if !s.transcodeAtivo() {
@@ -274,6 +292,13 @@ func (s *Server) handlePrepareEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, pedido := s.planoDeArquivo(r, arquivo)
+	daNuvem := db.SoNaNuvem(arquivo.Localizacao)
+	consulta := func() media.Progresso {
+		if daNuvem {
+			return s.progressoNaNuvem(r.Context(), arquivo)
+		}
+		return s.preparador.Consultar(pedido)
+	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -285,7 +310,7 @@ func (s *Server) handlePrepareEvents(w http.ResponseWriter, r *http.Request) {
 
 	var ultimo string
 	for {
-		progresso := s.preparador.Consultar(pedido)
+		progresso := consulta()
 		if payload, err := json.Marshal(progresso); err == nil && string(payload) != ultimo {
 			ultimo = string(payload)
 			fmt.Fprintf(w, "data: %s\n\n", payload)
@@ -336,6 +361,25 @@ func (s *Server) handlePreparado(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Cache-Control", "private, max-age=0")
 	http.ServeContent(w, r, filepath.Base(progresso.Arquivo), info.ModTime(), f)
+}
+
+// progressoNaNuvem traduz o estado do processamento no worker para o mesmo
+// formato do preparo local: o player não precisa saber quem prepara.
+func (s *Server) progressoNaNuvem(ctx context.Context, arquivo db.MediaFile) media.Progresso {
+	if _, err := s.db.DerivadoDe(ctx, arquivo.ID, "compat", 0); err == nil {
+		return media.Progresso{Estado: media.EstadoPronto, Percentual: 100, Receita: "nuvem"}
+	}
+	switch estado, erro := s.db.Processamento(ctx, arquivo.ID); estado {
+	case "pedido":
+		return media.Progresso{Estado: media.EstadoTrabalhando, Receita: "nuvem", Total: arquivo.Duration}
+	case "falhou":
+		return media.Progresso{Estado: media.EstadoErro, Receita: "nuvem", Erro: "o worker da nuvem falhou: " + erro}
+	case "concluido":
+		// Processado, mas sem compat: o worker achou que o original toca.
+		return media.Progresso{Estado: media.EstadoErro, Receita: "nuvem",
+			Erro: "a nuvem processou o arquivo e não gerou versão compatível"}
+	}
+	return media.Progresso{Estado: media.EstadoAusente, Receita: "nuvem"}
 }
 
 func (s *Server) transcodeAtivo() bool {

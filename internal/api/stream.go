@@ -91,13 +91,37 @@ func (s *Server) streamDaNuvem(w http.ResponseWriter, r *http.Request, file db.M
 		writeError(w, http.StatusServiceUnavailable, "na nuvem, indisponível no modo local")
 		return
 	}
-	url, err := arm.URLDeLeitura(r.Context(), file.NuvemKey, ttlDeLeitura)
+	key := file.NuvemKey
+	if tipo := r.URL.Query().Get("derivado"); tipo != "" {
+		d, err := s.db.DerivadoDe(r.Context(), file.ID, tipo, atoiDefault(r.URL.Query().Get("i"), 0))
+		if err != nil {
+			writeError(w, http.StatusNotFound, "derivado não existe")
+			return
+		}
+		key = d
+	}
+	url, err := arm.URLDeLeitura(r.Context(), key, ttlDeLeitura)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "não foi possível assinar a leitura: "+err.Error())
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	http.Redirect(w, r, url, http.StatusFound)
+}
+
+// derivadosDeImagem diz, em ordem de preferência, que imagem do worker serve
+// de fonte para a miniatura pedida.
+func derivadosDeImagem(t db.MediaType, largura int) []string {
+	switch t {
+	case db.TypeVideo:
+		return []string{"frame"}
+	case db.TypePhoto:
+		if largura <= 320 {
+			return []string{"thumb320", "thumb800"}
+		}
+		return []string{"thumb800"}
+	}
+	return nil
 }
 
 // Larguras permitidas para as miniaturas. Uma lista fechada evita que alguém
@@ -131,7 +155,16 @@ func (s *Server) handleFileThumb(w http.ResponseWriter, r *http.Request) {
 	if db.SoNaNuvem(file.Localizacao) {
 		arm, vida, ok := s.nuvem.Hibrido()
 		if ok {
-			origem, err = arm.URLDeLeitura(ctx, file.NuvemKey, ttlDeLeitura)
+			// A imagem pronta do worker é um JPEG de KB; o original pode ser
+			// um vídeo de GB. Com ela, a miniatura não lê o vídeo pela rede.
+			key := file.NuvemKey
+			for _, tipo := range derivadosDeImagem(file.Type, width) {
+				if d, err := s.db.DerivadoDe(ctx, file.ID, tipo, 0); err == nil {
+					key = d
+					break
+				}
+			}
+			origem, err = arm.URLDeLeitura(ctx, key, ttlDeLeitura)
 		}
 		if !ok || err != nil {
 			origem = ""

@@ -62,6 +62,12 @@ type Nuvem struct {
 	CDNDominio   string `json:"cdn_dominio,omitempty"`
 	CDNChaveID   string `json:"cdn_chave_id,omitempty"`
 	CDNParametro string `json:"cdn_parametro,omitempty"`
+
+	// V3: FilaJobs recebe pedidos de processamento (URL da fila SQS);
+	// FilaMac é a assinatura do Mac no tópico catalogo, de onde chegam os
+	// job.concluido. Vazias = sem processamento na nuvem.
+	FilaJobs string `json:"fila_jobs,omitempty"`
+	FilaMac  string `json:"fila_mac,omitempty"`
 }
 
 // CDN diz se a leitura deve passar pelo CloudFront.

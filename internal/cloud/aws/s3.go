@@ -19,6 +19,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/cloudfront/sign"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/smithy-go"
 
@@ -33,6 +35,9 @@ type bucket struct {
 	assina  *s3.PresignClient
 	nome    string
 	prefixo string
+
+	sqs *sqs.Client
+	sns *sns.Client
 
 	// cdn assina leituras pelo CloudFront. Nil = URL pré-assinada do S3.
 	cdn        *sign.URLSigner
@@ -60,7 +65,8 @@ func Conectar(ctx context.Context, cfg config.Nuvem, cliente *http.Client) (clou
 		}
 		o.UsePathStyle = cfg.PathStyle
 	})
-	b := &bucket{s3: c, assina: s3.NewPresignClient(c), nome: cfg.Bucket, prefixo: cfg.Prefixo}
+	b := &bucket{s3: c, assina: s3.NewPresignClient(c), nome: cfg.Bucket, prefixo: cfg.Prefixo,
+		sqs: sqs.NewFromConfig(awsCfg), sns: sns.NewFromConfig(awsCfg)}
 
 	if cfg.CDN() {
 		// A chave de assinatura só existe em memória: vem do SSM a cada

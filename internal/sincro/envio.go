@@ -87,3 +87,32 @@ func Concluir(ctx context.Context, arm cloud.Armazenamento, u db.Upload, partes 
 	}
 	return obj, nil
 }
+
+// EnviarCaminho sobe um arquivo local para key: PUT simples até 16 MiB,
+// multipart acima disso. É o que o worker usa para os derivados.
+func EnviarCaminho(ctx context.Context, arm cloud.Armazenamento, key, caminho, contentType string) (cloud.Objeto, error) {
+	info, err := os.Stat(caminho)
+	if err != nil {
+		return cloud.Objeto{}, err
+	}
+	if info.Size() <= parteMinima {
+		dados, err := os.ReadFile(caminho)
+		if err != nil {
+			return cloud.Objeto{}, err
+		}
+		if err := arm.Gravar(ctx, key, dados, contentType); err != nil {
+			return cloud.Objeto{}, err
+		}
+		return arm.Info(ctx, key)
+	}
+	u := db.Upload{Key: key, Tamanho: info.Size(), ParteTamanho: TamanhoDaParte(info.Size())}
+	if u.UploadID, err = arm.IniciarEnvio(ctx, key, contentType); err != nil {
+		return cloud.Objeto{}, err
+	}
+	partes, err := EnviarArquivo(ctx, arm, u, caminho, nil)
+	if err != nil {
+		_ = arm.AbortarEnvio(context.WithoutCancel(ctx), key, u.UploadID)
+		return cloud.Objeto{}, err
+	}
+	return Concluir(ctx, arm, u, partes)
+}

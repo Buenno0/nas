@@ -35,41 +35,41 @@ func FFprobePath() (string, error) {
 
 // ProbeResult é o subconjunto dos metadados do ffprobe que o NAS usa.
 type ProbeResult struct {
-	Duration float64
-	Width    int
-	Height   int
-	VCodec   string
-	ACodec   string
+	Duration float64 `json:"duration,omitempty"`
+	Width    int     `json:"width,omitempty"`
+	Height   int     `json:"height,omitempty"`
+	VCodec   string  `json:"vcodec,omitempty"`
+	ACodec   string  `json:"acodec,omitempty"`
 
 	// Detalhes que decidem se o navegador toca o arquivo. "h264" sozinho não
 	// decide: High 10 (yuv420p10le) é h264 e não toca em lugar nenhum.
-	PixFmt   string
-	VProfile string
-	Channels int
-	VBitrate int
+	PixFmt   string `json:"pix_fmt,omitempty"`
+	VProfile string `json:"vprofile,omitempty"`
+	Channels int    `json:"channels,omitempty"`
+	VBitrate int    `json:"vbitrate,omitempty"`
 
 	// Tags de áudio, usadas para agrupar músicas em álbuns.
-	Title  string
-	Artist string
-	Album  string
-	Track  int
+	Title  string `json:"title,omitempty"`
+	Artist string `json:"artist,omitempty"`
+	Album  string `json:"album,omitempty"`
+	Track  int    `json:"track,omitempty"`
 
 	// Todas as faixas de áudio e legenda do arquivo, na ordem em que aparecem.
 	// ACodec/Channels acima continuam sendo os da faixa padrão — é o que decide
 	// se o arquivo toca direto, e é o que o acervo antigo já gravava.
-	Streams []Stream
+	Streams []Stream `json:"streams,omitempty"`
 }
 
 // Stream é uma faixa de áudio ou legenda dentro do arquivo.
 type Stream struct {
-	Index    int    // como o ffmpeg endereça em -map 0:N
-	Kind     string // "audio" | "subtitle"
-	Codec    string
-	Lang     string
-	Title    string
-	Channels int
-	Default  bool
-	Forced   bool
+	Index    int    `json:"index"`          // como o ffmpeg endereça em -map 0:N
+	Kind     string `json:"kind,omitempty"` // "audio" | "subtitle"
+	Codec    string `json:"codec,omitempty"`
+	Lang     string `json:"lang,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Channels int    `json:"channels,omitempty"`
+	Default  bool   `json:"default,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
 }
 
 type ffprobeOutput struct {

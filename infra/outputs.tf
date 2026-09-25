@@ -20,6 +20,12 @@ output "configurar_nas" {
     nas config set nuvem.cdn_dominio ${aws_cloudfront_distribution.midia.domain_name}
     nas config set nuvem.cdn_chave_id ${aws_cloudfront_public_key.cdn.id}
     nas config set nuvem.cdn_parametro ${aws_ssm_parameter.chave_cdn.name}
+    nas config set nuvem.fila_jobs ${aws_sqs_queue.jobs.url}
+    nas config set nuvem.fila_mac ${aws_sqs_queue.mac.url}
     nas modo hibrido
   EOT
+}
+
+output "ecr_url" {
+  value = aws_ecr_repository.worker.repository_url
 }

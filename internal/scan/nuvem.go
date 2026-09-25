@@ -64,3 +64,23 @@ func (s *Scanner) IndexarNuvem(ctx context.Context, lib db.Library, key, rel str
 	}
 	return id, nil
 }
+
+// AplicarProbe grava metadados que vieram de fora (o manifesto do worker) num
+// arquivo já indexado: duração, codecs, faixas. É o ffprobe que o Mac não
+// precisou rodar.
+func (s *Scanner) AplicarProbe(ctx context.Context, fileID int64, res ProbeResult) error {
+	f, err := s.db.FileByID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+	lib, err := s.db.Library(ctx, f.LibraryID)
+	if err != nil {
+		return err
+	}
+	ff := &foundFile{path: f.Path, rel: f.RelPath, ext: f.Ext, size: f.Size, mtime: f.MTime,
+		mtype: f.Type, probe: res, probed: true}
+	if _, err := s.db.UpsertFile(ctx, mediaFileFrom(lib, ff), true); err != nil {
+		return err
+	}
+	return s.gravaFaixas(ctx, fileID, ff, nil)
+}

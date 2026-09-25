@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"nas/internal/cloud"
+	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/media"
 	"nas/internal/scan"
@@ -46,6 +47,7 @@ type Motor struct {
 	db      *db.DB
 	chave   *cloud.Chave
 	reserva func() int64
+	cfg     func() config.Nuvem
 
 	mu            sync.Mutex
 	tarefas       map[string]*Tarefa
@@ -63,8 +65,8 @@ type trabalho struct {
 }
 
 // Novo cria o motor. reserva é o espaço livre que fixar nunca consome.
-func Novo(database *db.DB, chave *cloud.Chave, reserva func() int64) *Motor {
-	return &Motor{db: database, chave: chave, reserva: reserva,
+func Novo(database *db.DB, chave *cloud.Chave, reserva func() int64, cfg func() config.Nuvem) *Motor {
+	return &Motor{db: database, chave: chave, reserva: reserva, cfg: cfg,
 		tarefas: map[string]*Tarefa{}, fila: make(chan trabalho, 1024)}
 }
 
@@ -99,6 +101,7 @@ func (m *Motor) Rodar(ctx context.Context) {
 
 	if m.chave.Modo() == cloud.ModoHibrido {
 		go m.Reconciliar(ctx)
+		go m.consumirCatalogo(ctx)
 	}
 	for {
 		select {
@@ -107,6 +110,7 @@ func (m *Motor) Rodar(ctx context.Context) {
 		case e := <-ch:
 			if e.Modo == cloud.ModoHibrido {
 				go m.Reconciliar(ctx)
+				go m.consumirCatalogo(ctx)
 			} else if e.Modo == cloud.ModoLocal {
 				m.pausarTudo()
 			}

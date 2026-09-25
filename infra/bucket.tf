@@ -107,7 +107,7 @@ resource "aws_s3_bucket_policy" "midia" {
         Effect    = "Allow"
         Principal = { Service = "cloudfront.amazonaws.com" }
         Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.midia.arn}/bibliotecas/*"
+        Resource  = ["${aws_s3_bucket.midia.arn}/bibliotecas/*", "${aws_s3_bucket.midia.arn}/derivados/*"]
         Condition = { StringEquals = { "AWS:SourceArn" = aws_cloudfront_distribution.midia.arn } }
       },
     ]

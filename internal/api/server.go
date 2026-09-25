@@ -82,8 +82,11 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 	if chave == nil {
 		chave = cloud.Nova(func() config.Nuvem { return config.Nuvem{} }, true)
 	}
-	motor := sincro.Novo(database, chave, func() int64 { return int64(cfg.ReservaGB * 1e9) })
-	return &Server{
+	srv := &Server{}
+	motor := sincro.Novo(database, chave, func() int64 { return int64(cfg.ReservaGB * 1e9) }, func() config.Nuvem {
+		return srv.ConfigNuvem()
+	})
+	*srv = Server{
 		nuvem:   chave,
 		sincro:  motor,
 		cfg:     cfg,
@@ -102,6 +105,7 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 		// Substituído pelo contexto real em Serve; até lá, nada roda.
 		fundo: context.Background(),
 	}
+	return srv
 }
 
 // Auth expõe o serviço de autenticação para a CLI (criar usuário inicial).

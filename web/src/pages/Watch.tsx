@@ -743,7 +743,10 @@ function PainelDePreparo({
     audio: 'Recodificando o áudio',
     video: 'Recodificando a imagem',
   }
-  const titulo = rotulos[plano.modo] ?? 'Preparando'
+  // Item só da nuvem: quem prepara é o worker na AWS, sem barra de progresso
+  // fina (o evento só chega quando termina).
+  const naNuvem = preparo?.receita === 'nuvem'
+  const titulo = naNuvem ? 'Preparando na nuvem' : (rotulos[plano.modo] ?? 'Preparando')
   const percentual = preparo?.percentual ?? 0
   const restante = preparo?.restante_segundos ?? 0
   const erro = preparo?.estado === 'erro'
@@ -764,13 +767,15 @@ function PainelDePreparo({
 
             <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/15">
               <div
-                className="h-full bg-accent transition-[width] duration-500"
-                style={{ width: `${Math.max(2, percentual)}%` }}
+                className={`h-full bg-accent transition-[width] duration-500 ${naNuvem ? 'animate-pulse' : ''}`}
+                style={{ width: `${naNuvem ? 100 : Math.max(2, percentual)}%` }}
               />
             </div>
 
             <p className="mt-3 font-mono text-xs text-white/60 tabular-nums">
-              {preparo?.estado === 'fila'
+              {naNuvem
+                ? 'o worker avisa quando terminar; pode fechar esta tela'
+                : preparo?.estado === 'fila'
                 ? 'na fila…'
                 : `${percentual}%${restante > 0 ? ` · faltam ${clockTime(restante)}` : ''}${
                     preparo?.velocidade ? ` · ${preparo.velocidade.toFixed(0)}× tempo real` : ''

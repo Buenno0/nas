@@ -35,6 +35,9 @@ func cmdConfig(args []string) error {
 			if cfg.Nuvem.CDN() {
 				fmt.Printf(" · CDN %s", cfg.Nuvem.CDNDominio)
 			}
+			if cfg.Nuvem.FilaJobs != "" {
+				fmt.Print(" · workers")
+			}
 			fmt.Println()
 		}
 		return nil
@@ -70,6 +73,10 @@ func cmdConfig(args []string) error {
 		cfg.Nuvem.CDNChaveID = strings.TrimSpace(value)
 	case "nuvem.cdn_parametro":
 		cfg.Nuvem.CDNParametro = strings.TrimSpace(value)
+	case "nuvem.fila_jobs":
+		cfg.Nuvem.FilaJobs = strings.TrimSpace(value)
+	case "nuvem.fila_mac":
+		cfg.Nuvem.FilaMac = strings.TrimSpace(value)
 	case "nuvem.path_style":
 		b, err := strconv.ParseBool(value)
 		if err != nil {
@@ -83,7 +90,7 @@ func cmdConfig(args []string) error {
 		}
 		cfg.Port = port
 	default:
-		return fmt.Errorf("chave desconhecida: %s (use port, tmdb_key, tmdb_lang, scan_every, tunnel, nuvem.bucket, nuvem.regiao, nuvem.perfil, nuvem.endpoint, nuvem.prefixo, nuvem.path_style, nuvem.cdn_dominio, nuvem.cdn_chave_id, nuvem.cdn_parametro; o modo muda com `nas modo`)", key)
+		return fmt.Errorf("chave desconhecida: %s (use port, tmdb_key, tmdb_lang, scan_every, tunnel, nuvem.bucket, nuvem.regiao, nuvem.perfil, nuvem.endpoint, nuvem.prefixo, nuvem.path_style, nuvem.cdn_dominio, nuvem.cdn_chave_id, nuvem.cdn_parametro, nuvem.fila_jobs, nuvem.fila_mac; o modo muda com `nas modo`)", key)
 	}
 
 	if err := config.Save(cfg); err != nil {
