@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"time"
 
 	"nas/internal/cloud"
 	"nas/internal/db"
@@ -20,6 +21,14 @@ import (
 // EnviarArquivo manda as partes que o bucket ainda não tem e devolve a lista
 // completa, em ordem. progresso recebe os bytes já no bucket.
 func EnviarArquivo(ctx context.Context, arm cloud.Armazenamento, u db.Upload, origem string, progresso func(feitos int64)) ([]cloud.Parte, error) {
+	return EnviarArquivoCom(ctx, arm, u, origem, progresso, nil)
+}
+
+// AoEnviarParte recebe cada parte que chegou ao bucket, para o diário.
+type AoEnviarParte func(p cloud.Parte, tamanho int64, duracao time.Duration)
+
+// EnviarArquivoCom é o EnviarArquivo com um aviso por parte enviada.
+func EnviarArquivoCom(ctx context.Context, arm cloud.Armazenamento, u db.Upload, origem string, progresso func(feitos int64), aoParte AoEnviarParte) ([]cloud.Parte, error) {
 	feitas, err := arm.PartesEnviadas(ctx, u.Key, u.UploadID)
 	if err != nil {
 		return nil, fmt.Errorf("consultando partes: %w", err)
@@ -54,11 +63,15 @@ func EnviarArquivo(ctx context.Context, arm cloud.Armazenamento, u db.Upload, or
 		}
 		off := int64(n-1) * u.ParteTamanho
 		tam := tamanhoDa(n)
+		inicio := time.Now()
 		etag, err := arm.EnviarParte(ctx, u.Key, u.UploadID, n, io.NewSectionReader(f, off, tam), tam)
 		if err != nil {
 			return nil, fmt.Errorf("parte %d: %w", n, err)
 		}
 		tem[n] = cloud.Parte{Numero: n, ETag: etag}
+		if aoParte != nil {
+			aoParte(tem[n], tam, time.Since(inicio))
+		}
 		feitos += tam
 		if progresso != nil {
 			progresso(feitos)

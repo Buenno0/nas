@@ -193,8 +193,12 @@ func (m *Motor) aplicarFederado(ctx context.Context, arm cloud.Armazenamento, ev
 		return nil // o filtro da assinatura já deveria ter barrado
 	}
 	if repetido, err := m.db.JaProcessado(ctx, ev.EventID); err != nil || repetido {
+		if repetido {
+			m.db.Anota(ctx, "evento.repetido", 0, 0, ev.Tipo, map[string]any{"event_id": ev.EventID, "origem": ev.Origem})
+		}
 		return err
 	}
+	m.db.Anota(ctx, "evento.recebido", 0, 0, ev.Tipo, map[string]any{"event_id": ev.EventID, "origem": ev.Origem})
 	ctx = db.SemEventos(ctx)
 	switch ev.Tipo {
 	case "progresso.atualizado":

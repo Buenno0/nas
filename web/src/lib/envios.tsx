@@ -163,6 +163,8 @@ export function EnviosProvider({ children }: { children: ReactNode }) {
       await enviar(envio.arquivo, upload, () => hibridoRef.current, (p) => muda(envio.chave, { enviados: p.enviados }))
       muda(envio.chave, { estado: 'pronto', enviados: envio.arquivo.size })
       void queryClient.invalidateQueries()
+      // A capa vem do TMDB em segundo plano, logo depois de concluir.
+      window.setTimeout(() => void queryClient.invalidateQueries(), 5000)
     } catch (e) {
       if (e instanceof PausadoPeloModo || !hibridoRef.current) muda(envio.chave, { estado: 'pausado' })
       else muda(envio.chave, { estado: 'erro', erro: (e as Error).message })

@@ -251,16 +251,23 @@ func (m *Motor) enviar(ctx context.Context, arm cloud.Armazenamento, f db.MediaF
 		}
 	}
 	_ = m.db.MarcaNaNuvem(ctx, f.ID, db.LocalEnviando, "")
+	nome := filepath.Base(f.RelPath)
+	m.db.Anota(ctx, "envio.inicio", u.ID, f.ID, nome, map[string]any{
+		"origem": "mac", "tamanho": u.Tamanho, "parte_tamanho": u.ParteTamanho, "key": u.Key})
 
-	partes, err := EnviarArquivo(ctx, arm, u, f.Path, m.progresso(t))
+	partes, err := EnviarArquivoCom(ctx, arm, u, f.Path, m.progresso(t), m.anotaParte(u.ID, f.ID, nome))
 	if err != nil {
 		_ = m.db.MarcaNaNuvem(context.WithoutCancel(ctx), f.ID, db.LocalLocal, "")
+		m.anotaInterrupcao(ctx, u.ID, f.ID, nome, err)
 		return err
 	}
 	obj, err := Concluir(ctx, arm, u, partes)
 	if err != nil {
+		m.db.Anota(ctx, "envio.erro", u.ID, f.ID, nome, map[string]any{"erro": err.Error()})
 		return err
 	}
+	m.db.Anota(ctx, "envio.concluido", u.ID, f.ID, nome, map[string]any{
+		"origem": "mac", "partes": len(partes), "etag": strings.Trim(obj.ETag, `"`), "tamanho": obj.Tamanho})
 	if err := m.db.EstadoDoUpload(ctx, u.ID, "concluido"); err != nil {
 		return err
 	}
@@ -268,6 +275,22 @@ func (m *Motor) enviar(ctx context.Context, arm cloud.Armazenamento, f db.MediaF
 		return err
 	}
 	return m.db.MudaCaminho(ctx, f.ID, f.Path, db.LocalAmbos, strings.Trim(obj.ETag, `"`), f.MTime)
+}
+
+func (m *Motor) anotaParte(uploadID, fileID int64, nome string) AoEnviarParte {
+	return func(p cloud.Parte, tamanho int64, d time.Duration) {
+		m.db.Anota(context.Background(), "envio.parte", uploadID, fileID, nome, map[string]any{
+			"n": p.Numero, "tamanho": tamanho, "ms": d.Milliseconds(), "etag": strings.Trim(p.ETag, `"`)})
+	}
+}
+
+// anotaInterrupcao separa a pausa do kill switch de um erro de verdade.
+func (m *Motor) anotaInterrupcao(ctx context.Context, uploadID, fileID int64, nome string, err error) {
+	if m.chave.Modo() != cloud.ModoHibrido || errors.Is(err, context.Canceled) {
+		m.db.Anota(ctx, "envio.pausa", uploadID, fileID, nome, map[string]any{"motivo": "kill switch"})
+		return
+	}
+	m.db.Anota(ctx, "envio.erro", uploadID, fileID, nome, map[string]any{"erro": err.Error()})
 }
 
 // --- Fixar (nuvem → baixando → ambos) ---------------------------------------

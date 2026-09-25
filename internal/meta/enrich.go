@@ -328,6 +328,29 @@ func (e *Enricher) localArtwork(ctx context.Context, title db.Title) bool {
 	return true
 }
 
+// EnrichUpload dá capa e sinopse a um título que acabou de chegar por
+// upload, sem esperar o próximo scan. Aqui não há pontuação: vale o primeiro
+// resultado do TMDB (a busca já filtra pelo ano do nome, quando há). Quem
+// casou errado corrige à mão, como em qualquer título. Título já casado ou
+// corrigido à mão não é tocado.
+func (e *Enricher) EnrichUpload(ctx context.Context, titleID int64) error {
+	title, err := e.db.TitleByID(ctx, titleID)
+	if err != nil {
+		return err
+	}
+	if title.MetaState == "matched" || title.MetaState == "manual" || !e.tmdbApplies(title) {
+		return nil
+	}
+	results, err := e.search(ctx, title)
+	if err != nil {
+		return err
+	}
+	if len(results) == 0 {
+		return e.db.SetTitleState(ctx, title.ID, "unmatched")
+	}
+	return e.apply(ctx, title, results[0], "matched")
+}
+
 // SearchCandidates alimenta a correção manual de match na interface.
 func (e *Enricher) SearchCandidates(ctx context.Context, kind db.TitleKind, query string, year int) ([]tmdb.Result, error) {
 	if !e.client.Enabled() {

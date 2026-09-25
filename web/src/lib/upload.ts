@@ -48,6 +48,7 @@ export async function enviar(
     Math.min(upload.parte_tamanho, upload.tamanho - (n - 1) * upload.parte_tamanho)
 
   let enviados = [...feitas.keys()].reduce((soma, n) => soma + tamanhoDa(n), 0)
+  if (feitas.size > 0) api.anotarEnvio(upload.id, { tipo: 'retomada' })
   const emVoo = new Map<number, number>()
   const avisa = () => {
     const parcial = [...emVoo.values()].reduce((a, b) => a + b, 0)
@@ -76,6 +77,7 @@ export async function enviar(
   const enviaParte = (n: number, url: string) =>
     new Promise<string>((resolve, reject) => {
       const inicio = (n - 1) * upload.parte_tamanho
+      const t0 = performance.now()
       const xhr = new XMLHttpRequest()
       xhr.open('PUT', url)
       xhr.upload.onprogress = (e) => {
@@ -84,7 +86,10 @@ export async function enviar(
       }
       xhr.onload = () => {
         const etag = xhr.getResponseHeader('ETag')
-        if (xhr.status >= 200 && xhr.status < 300 && etag) resolve(etag)
+        if (xhr.status >= 200 && xhr.status < 300 && etag) {
+          api.anotarEnvio(upload.id, { tipo: 'parte', n, tamanho: tamanhoDa(n), ms: Math.round(performance.now() - t0), etag })
+          resolve(etag)
+        }
         else if (!etag && xhr.status < 300)
           reject(new Error('o bucket não expôs o ETag: confira o CORS (ExposeHeaders: ETag)'))
         else reject(new Error(`parte ${n}: ${xhr.status}`))
@@ -114,8 +119,10 @@ export async function enviar(
     controle.abort()
     if (!ativo() || e instanceof PausadoPeloModo) {
       onProgresso({ enviados, total: upload.tamanho, pausado: true })
+      api.anotarEnvio(upload.id, { tipo: 'pausa' })
       throw new PausadoPeloModo()
     }
+    api.anotarEnvio(upload.id, { tipo: 'erro', erro: (e as Error).message })
     throw e
   } finally {
     window.clearInterval(vigia)

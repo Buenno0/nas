@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"nas/internal/auth"
@@ -81,6 +83,14 @@ func (s *Server) handleCriarUpload(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := juntos(r.Context(), nctx)
 	defer cancel()
+
+	if u, ok := s.reaproveitaUpload(ctx, arm, lib.ID, body.Nome, body.Tamanho); ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"upload": u,
+			"partes": (u.Tamanho + u.ParteTamanho - 1) / u.ParteTamanho,
+		})
+		return
+	}
 	uploadID, err := arm.IniciarEnvio(ctx, key, body.ContentType)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "o bucket recusou o envio: "+err.Error())
@@ -103,10 +113,31 @@ func (s *Server) handleCriarUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	u.ID = id
 	u.Estado = "enviando"
+	s.db.Anota(r.Context(), "envio.inicio", u.ID, 0, u.Nome, map[string]any{
+		"origem": "navegador", "tamanho": u.Tamanho, "parte_tamanho": u.ParteTamanho, "key": u.Key})
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"upload": u,
 		"partes": (u.Tamanho + u.ParteTamanho - 1) / u.ParteTamanho,
 	})
+}
+
+// reaproveitaUpload devolve um envio aberto do mesmo arquivo, se o bucket
+// ainda o conhece. O navegador então retoma pelas partes que já estão lá. Um
+// envio que o bucket esqueceu (abortado, limpo pelo lifecycle) é fechado aqui.
+func (s *Server) reaproveitaUpload(ctx context.Context, arm cloud.Armazenamento, libID int64, nome string, tamanho int64) (db.Upload, bool) {
+	u, err := s.db.UploadAbertoDoNavegador(ctx, libID, nome, tamanho)
+	if err != nil {
+		return db.Upload{}, false
+	}
+	if _, err := arm.PartesEnviadas(ctx, u.Key, u.UploadID); err != nil {
+		if errors.Is(err, cloud.ErrNaoExiste) {
+			_ = s.db.EstadoDoUpload(ctx, u.ID, "abortado")
+			s.db.Anota(ctx, "envio.abortado", u.ID, 0, u.Nome, map[string]any{"motivo": "o bucket não conhece mais este envio"})
+		}
+		return db.Upload{}, false
+	}
+	s.db.Anota(ctx, "envio.retomada", u.ID, 0, u.Nome, map[string]any{"motivo": "mesmo arquivo solto de novo"})
+	return u, true
 }
 
 // uploadAberto carrega o upload do caminho e confere que ainda aceita partes.
@@ -163,6 +194,7 @@ func (s *Server) handleURLsDoUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		urls[n] = url
 	}
+	s.db.Anota(r.Context(), "envio.urls", u.ID, 0, u.Nome, map[string]any{"partes": body.Partes})
 	writeJSON(w, http.StatusOK, map[string]any{"urls": urls})
 }
 
@@ -220,6 +252,7 @@ func (s *Server) handleConcluirUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(partes, func(i, j int) bool { return partes[i].Numero < partes[j].Numero })
 	if err := arm.ConcluirEnvio(ctx, u.Key, u.UploadID, partes); err != nil {
+		s.db.Anota(r.Context(), "envio.erro", u.ID, 0, u.Nome, map[string]any{"erro": err.Error()})
 		writeError(w, http.StatusBadGateway, "o bucket não fechou o envio: "+err.Error())
 		return
 	}
@@ -235,13 +268,37 @@ func (s *Server) handleConcluirUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fileID, err := s.indexarDaNuvem(ctx, arm, u)
+	s.db.Anota(r.Context(), "envio.concluido", u.ID, fileID, u.Nome, map[string]any{
+		"origem": "navegador", "partes": len(partes), "tamanho": tamanho})
 	if err != nil {
 		// O arquivo está salvo no bucket; só o índice falhou. Não é perda.
 		log.Printf("indexando %s: %v", u.Key, err)
 		writeError(w, http.StatusInternalServerError, "enviado, mas não foi possível indexar: "+err.Error())
 		return
 	}
+	s.capaDoUpload(fileID)
 	writeJSON(w, http.StatusOK, map[string]any{"file_id": fileID})
+}
+
+// capaDoUpload busca os metadados do título recém-enviado em segundo plano: a
+// resposta não espera o TMDB, e a página do título pega a capa no próximo
+// refetch.
+func (s *Server) capaDoUpload(fileID int64) {
+	go func() {
+		ctx, cancel := context.WithTimeout(s.fundo, time.Minute)
+		defer cancel()
+		f, err := s.db.FileByID(ctx, fileID)
+		if err != nil || f.TitleID == nil {
+			return
+		}
+		enricher, err := s.enricher()
+		if err == nil {
+			err = enricher.EnrichUpload(ctx, *f.TitleID)
+		}
+		if err != nil {
+			log.Printf("capa do upload %d: %v", fileID, err)
+		}
+	}()
 }
 
 // indexarDaNuvem lê o cabeçalho do arquivo pela URL assinada (ffprobe por
@@ -272,10 +329,48 @@ func (s *Server) handleAbortarUpload(w http.ResponseWriter, r *http.Request) {
 			log.Printf("abortando %s no bucket: %v", u.Key, err)
 		}
 	}
+	s.db.Anota(r.Context(), "envio.abortado", u.ID, 0, u.Nome, nil)
 	if err := s.db.EstadoDoUpload(r.Context(), u.ID, "abortado"); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleDiarioDoUpload recebe do navegador o que só ele vê: cada parte que
+// o S3 aceitou (com o tempo que levou), pausas e erros. É só o diário.
+func (s *Server) handleDiarioDoUpload(w http.ResponseWriter, r *http.Request) {
+	u, err := s.db.UploadPorID(r.Context(), atoi64(r.PathValue("id")))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "upload não encontrado")
+		return
+	}
+	var body struct {
+		Tipo    string `json:"tipo"`
+		N       int32  `json:"n,omitempty"`
+		Tamanho int64  `json:"tamanho,omitempty"`
+		Ms      int64  `json:"ms,omitempty"`
+		ETag    string `json:"etag,omitempty"`
+		Erro    string `json:"erro,omitempty"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "JSON inválido")
+		return
+	}
+	dados := map[string]any{}
+	switch body.Tipo {
+	case "parte":
+		dados = map[string]any{"n": body.N, "tamanho": body.Tamanho, "ms": body.Ms, "etag": strings.Trim(body.ETag, `"`)}
+	case "pausa":
+		dados["motivo"] = "kill switch"
+	case "retomada":
+	case "erro":
+		dados["erro"] = body.Erro
+	default:
+		writeError(w, http.StatusBadRequest, "tipo deve ser parte, pausa, retomada ou erro")
+		return
+	}
+	s.db.Anota(r.Context(), "envio."+body.Tipo, u.ID, 0, u.Nome, dados)
 	w.WriteHeader(http.StatusNoContent)
 }
 

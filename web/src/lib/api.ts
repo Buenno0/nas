@@ -379,13 +379,92 @@ export interface TitleQuery {
   offset?: number
 }
 
-function query(params: TitleQuery): string {
+function query(params: TitleQuery | Record<string, string | number | undefined>): string {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '' && value !== 0) search.set(key, String(value))
   }
   const s = search.toString()
   return s ? `?${s}` : ''
+}
+
+// --- Tela técnica -----------------------------------------------------------
+
+export interface NotaDoDiario {
+  id: number
+  /** ms desde a época */
+  em: number
+  tipo: string
+  upload_id?: number
+  file_id?: number
+  nome?: string
+  dados: Record<string, unknown>
+}
+
+export interface UsoDoPrefixo {
+  prefixo: string
+  bytes: number
+  objetos: number
+  classes: Record<string, number>
+  truncado: boolean
+}
+
+export interface InspecaoDoBucket {
+  bucket: string
+  regiao: string
+  versionamento: string
+  lifecycle: { id: string; prefixo: string; ativa: boolean; resumo: string }[]
+  cors: string[]
+  prefixos: UsoDoPrefixo[]
+  multiparts_pendentes: { key: string; iniciado: string }[]
+  credencial_expira?: string
+  erros?: Record<string, string>
+}
+
+export interface FilaTecnica {
+  papel: string
+  nome: string
+  visiveis: number
+  em_voo: number
+  atrasadas: number
+  erro?: string
+}
+
+export interface Tecnico {
+  pulso: EstadoNuvem & {
+    conexoes: number
+    certificado_vence?: string
+    certificado_cn?: string
+    eventos_pendentes: number
+    ultima_reconciliacao?: string
+    worker_visto?: string
+  }
+  nuvem: {
+    indisponivel: boolean
+    motivo?: string
+    bucket?: InspecaoDoBucket
+    filas: FilaTecnica[]
+    em: string
+  }
+}
+
+export interface CustoDaNuvem {
+  mes: string
+  moeda: string
+  total: number
+  por_servico: { servico: string; valor: number }[]
+  por_dia: { dia: string; valor: number }[]
+  previsao?: number
+  limite?: number
+  em: string
+  erros?: Record<string, string>
+}
+
+export interface RespostaCusto {
+  indisponivel: boolean
+  motivo?: string
+  custo?: CustoDaNuvem
+  do_cache?: boolean
 }
 
 export const api = {
@@ -469,6 +548,19 @@ export const api = {
   modoEventsUrl: () => '/api/modo/events',
 
   sincronizacao: () => request<EstadoSincronizacao>('/api/sincronizacao'),
+  tecnico: (atualizar = false) => request<Tecnico>(`/api/tecnico${atualizar ? '?atualizar=1' : ''}`),
+  custo: (atualizar = false) => request<RespostaCusto>(`/api/tecnico/custo${atualizar ? '?atualizar=1' : ''}`),
+  diario: (f: { tipo?: string; upload?: number; antes?: number; limite?: number } = {}) =>
+    request<NotaDoDiario[]>(`/api/tecnico/diario${query(f)}`),
+  /** Fogo e esquece: o diário nunca pode atrapalhar um envio. */
+  anotarEnvio: (id: number, nota: { tipo: 'parte' | 'pausa' | 'retomada' | 'erro'; n?: number; tamanho?: number; ms?: number; etag?: string; erro?: string }) =>
+    void fetch(`/api/uploads/${id}/diario`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nota),
+      keepalive: true,
+    }).catch(() => {}),
   reconciliar: () => request<{ iniciado: boolean }>('/api/sincronizacao', { method: 'POST' }),
   acaoDeNuvem: (fileId: number, acao: AcaoDeNuvem) =>
     request<{ na_fila: boolean }>(`/api/files/${fileId}/nuvem/${acao}`, { method: 'POST' }),

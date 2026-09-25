@@ -27,7 +27,7 @@ func Available() bool {
 
 // Rotas que o React resolve no cliente. Só elas recebem o index.html; o que
 // não estiver aqui é 404 de verdade, com a tela de erro.
-var spaRoutes = []string{"/", "/search", "/settings", "/metricas", "/artistas", "/colecoes", "/ruinas", "/conectar"}
+var spaRoutes = []string{"/", "/search", "/settings", "/metricas", "/tecnico", "/artistas", "/colecoes", "/ruinas", "/conectar"}
 var spaPrefixes = []string{"/library/", "/title/", "/watch/", "/artista/", "/colecao/"}
 
 // IsSPARoute diz se o caminho pertence ao aplicativo.

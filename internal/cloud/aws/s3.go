@@ -39,6 +39,11 @@ type bucket struct {
 	sqs *sqs.Client
 	sns *sns.Client
 
+	// Só para a tela técnica: quando a credencial atual vence.
+	cred   aws.CredentialsProvider
+	regiao string
+	awsCfg aws.Config // painel de custo: Cost Explorer, Budgets e STS
+
 	// cdn assina leituras pelo CloudFront. Nil = URL pré-assinada do S3.
 	cdn        *sign.URLSigner
 	cdnDominio string
@@ -66,7 +71,8 @@ func Conectar(ctx context.Context, cfg config.Nuvem, cliente *http.Client) (clou
 		o.UsePathStyle = cfg.PathStyle
 	})
 	b := &bucket{s3: c, assina: s3.NewPresignClient(c), nome: cfg.Bucket, prefixo: cfg.Prefixo,
-		sqs: sqs.NewFromConfig(awsCfg), sns: sns.NewFromConfig(awsCfg)}
+		sqs: sqs.NewFromConfig(awsCfg), sns: sns.NewFromConfig(awsCfg),
+		cred: awsCfg.Credentials, regiao: cfg.Regiao, awsCfg: awsCfg}
 
 	if cfg.CDN() {
 		// A chave de assinatura só existe em memória: vem do SSM a cada
@@ -102,6 +108,12 @@ func (b *bucket) Verificar(ctx context.Context) error {
 func naoExiste(err error) bool {
 	var api smithy.APIError
 	return errors.As(err, &api) && (api.ErrorCode() == "NotFound" || api.ErrorCode() == "NoSuchKey")
+}
+
+// envioSumiu: o multipart foi abortado ou concluído (ou o lifecycle limpou).
+func envioSumiu(err error) bool {
+	var api smithy.APIError
+	return errors.As(err, &api) && api.ErrorCode() == "NoSuchUpload"
 }
 
 func (b *bucket) Info(ctx context.Context, key string) (cloud.Objeto, error) {
@@ -245,6 +257,9 @@ func (b *bucket) PartesEnviadas(ctx context.Context, key, uploadID string) ([]cl
 			Bucket: &b.nome, Key: aws.String(b.chave(key)), UploadId: &uploadID, PartNumberMarker: marca,
 		})
 		if err != nil {
+			if envioSumiu(err) {
+				return nil, cloud.ErrNaoExiste
+			}
 			return nil, err
 		}
 		for _, p := range out.Parts {

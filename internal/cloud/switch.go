@@ -48,6 +48,8 @@ type Chave struct {
 	atual      atomic.Pointer[estado]
 	transicao  sync.Mutex // serializa Ativar; Desligar nunca espera por ele
 	bloqueadas atomic.Int64
+	conexoes   atomic.Int64 // TCP abertas agora pelo cliente de nuvem
+	base       *http.Transport
 	travado    bool
 	cfg        func() config.Nuvem
 	cliente    *http.Client
@@ -60,6 +62,8 @@ type Chave struct {
 func Nova(cfg func() config.Nuvem, travado bool) *Chave {
 	c := &Chave{cfg: cfg, travado: travado, ouvintes: map[chan Estado]struct{}{}}
 	base := http.DefaultTransport.(*http.Transport).Clone()
+	base.DialContext = contaConexoes(base.DialContext, &c.conexoes)
+	c.base = base
 	c.cliente = &http.Client{Transport: guarda{base: base, chave: c}}
 	c.atual.Store(&estado{modo: ModoLocal, desde: time.Now()})
 	return c
@@ -83,6 +87,10 @@ func (c *Chave) Estado() Estado {
 		Bloqueadas:  c.bloqueadas.Load(),
 	}
 }
+
+// Conexoes é quantas conexões TCP o cliente de nuvem mantém abertas agora.
+// No modo local tem de chegar a zero: é a prova do kill switch.
+func (c *Chave) Conexoes() int64 { return c.conexoes.Load() }
 
 // Bloqueadas é o contador nuvem_bloqueadas_total.
 func (c *Chave) Bloqueadas() int64 { return c.bloqueadas.Load() }
@@ -171,6 +179,9 @@ func (c *Chave) Desligar() {
 	if velho.cancel != nil {
 		velho.cancel()
 	}
+	// Conexões ociosas do keep-alive também vão embora: nada fica aberto
+	// com a AWS depois do corte.
+	c.base.CloseIdleConnections()
 	if velho.modo != ModoLocal {
 		c.avisa()
 	}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"path"
+	"path/filepath"
 	"time"
 
 	"nas/internal/cloud"
@@ -56,8 +58,10 @@ func (m *Motor) PedirProcessamento(ctx context.Context, fileID int64) error {
 	}
 	corpo, _ := json.Marshal(cloud.Job{SchemaVersion: cloud.VersaoDoContrato, Tipo: "processar", Key: f.NuvemKey, Origem: "mac"})
 	if err := filas.EnviarMensagem(nctx, cfg.FilaJobs, corpo); err != nil {
+		m.db.Anota(ctx, "job.erro", 0, fileID, filepath.Base(f.RelPath), map[string]any{"erro": err.Error()})
 		return err
 	}
+	m.db.Anota(ctx, "job.pedido", 0, fileID, filepath.Base(f.RelPath), map[string]any{"key": f.NuvemKey})
 	return m.db.MarcaProcessamento(ctx, fileID, "pedido", "")
 }
 
@@ -142,6 +146,22 @@ func (m *Motor) AplicarEvento(ctx context.Context, arm cloud.Armazenamento, corp
 	// Qualquer resposta prova que existe um worker do outro lado da fila.
 	if ev.Tipo == "job.concluido" || ev.Tipo == "job.falhou" {
 		_ = m.db.GravaEstadoNuvem(ctx, "worker_visto", time.Now().Format(time.RFC3339))
+		dados := map[string]any{"key": ev.Key}
+		if ev.Erro != "" {
+			dados["erro"] = ev.Erro
+		}
+		// Quanto o job levou, do pedido deste Mac até a resposta.
+		if estado, _, quando := m.db.ProcessamentoDesde(ctx, fileID); estado == "pedido" && !quando.IsZero() {
+			dados["ms"] = time.Since(quando).Milliseconds()
+		}
+		if ev.Manifesto != nil {
+			tipos := make([]string, 0, len(ev.Manifesto.Derivados))
+			for _, d := range ev.Manifesto.Derivados {
+				tipos = append(tipos, d.Tipo)
+			}
+			dados["derivados"] = tipos
+		}
+		m.db.Anota(ctx, ev.Tipo, 0, fileID, path.Base(ev.Key), dados)
 	}
 	switch ev.Tipo {
 	case "job.falhou":

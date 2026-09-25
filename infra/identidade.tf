@@ -88,6 +88,33 @@ resource "aws_iam_role_policy" "mac" {
         Resource = aws_sqs_queue.mac.arn
       },
       {
+        # Tela técnica: só leitura da configuração do bucket e das filas.
+        Sid      = "InspecionarBucket"
+        Effect   = "Allow"
+        Action   = ["s3:GetBucketVersioning", "s3:GetLifecycleConfiguration", "s3:GetBucketCORS"]
+        Resource = aws_s3_bucket.midia.arn
+      },
+      {
+        Sid    = "InspecionarFilas"
+        Effect = "Allow"
+        Action = ["sqs:GetQueueAttributes"]
+        Resource = [aws_sqs_queue.jobs.arn, aws_sqs_queue.jobs_dlq.arn,
+        aws_sqs_queue.mac.arn, aws_sqs_queue.mac_dlq.arn]
+      },
+      {
+        # Painel de custo. O Cost Explorer não aceita recurso específico.
+        Sid      = "LerCustos"
+        Effect   = "Allow"
+        Action   = ["ce:GetCostAndUsage"]
+        Resource = "*"
+      },
+      {
+        Sid      = "LerOrcamento"
+        Effect   = "Allow"
+        Action   = ["budgets:ViewBudget"]
+        Resource = aws_budgets_budget.mensal.arn
+      },
+      {
         Sid      = "ChaveDaCDN"
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]

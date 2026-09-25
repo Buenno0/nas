@@ -78,7 +78,11 @@ export function CartaoDeEnvios() {
   const doLote = linhas.filter((l) => l.lote === lote.numero)
 
   const comeca = (e: PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button, a')) return
+    // Botões e links do cabeçalho continuam clicáveis; a alça é botão (para o
+    // teclado) mas é justamente por onde se arrasta.
+    const alvo = (e.target as HTMLElement).closest('button, a')
+    if (alvo && !alvo.hasAttribute('data-alca')) return
+    e.preventDefault()
     arrasto.current = { dx: e.clientX - posRef.current.x, dy: e.clientY - posRef.current.y }
     try {
       e.currentTarget.setPointerCapture(e.pointerId)
@@ -123,6 +127,7 @@ export function CartaoDeEnvios() {
       >
         <button
           type="button"
+          data-alca
           onKeyDown={teclado}
           aria-label="Mover o cartão (setas do teclado)"
           className="grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-muted hover:text-ink"

@@ -104,8 +104,26 @@ func TestS3MultipartDePontaAPonta(t *testing.T) {
 		t.Fatal("o conteúdo lido difere do enviado")
 	}
 
+	// O raio-X da tela técnica enxerga o objeto sob o prefixo dele.
+	in := arm.(cloud.Inspetor).Inspecionar(ctx)
+	achou := false
+	for _, p := range in.Prefixos {
+		if p.Prefixo == "bibliotecas/" && p.Objetos > 0 && p.Bytes >= int64(len(dados)) {
+			achou = true
+		}
+	}
+	if !achou {
+		t.Fatalf("inspeção não achou o objeto: %+v", in)
+	}
+	if chave.Conexoes() == 0 {
+		t.Fatal("o contador de conexões não viu as conexões com o MinIO")
+	}
+
 	// Kill switch: depois dele, o adapter antigo não consegue falar.
 	chave.Desligar()
+	if chave.Conexoes() != 0 {
+		t.Fatalf("%d conexões abertas depois do kill switch", chave.Conexoes())
+	}
 	if _, err := arm.Tamanho(ctx, key); err == nil {
 		t.Fatal("o adapter falou com o bucket depois do kill switch")
 	}

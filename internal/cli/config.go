@@ -79,6 +79,8 @@ func cmdConfig(args []string) error {
 		cfg.Nuvem.FilaEventos = strings.TrimSpace(value)
 	case "nuvem.topico_catalogo":
 		cfg.Nuvem.Topico = strings.TrimSpace(value)
+	case "nuvem.orcamento":
+		cfg.Nuvem.Orcamento = strings.TrimSpace(value)
 	case "nuvem.path_style":
 		b, err := strconv.ParseBool(value)
 		if err != nil {
@@ -92,7 +94,7 @@ func cmdConfig(args []string) error {
 		}
 		cfg.Port = port
 	default:
-		return fmt.Errorf("chave desconhecida: %s (use port, tmdb_key, tmdb_lang, scan_every, tunnel, nuvem.bucket, nuvem.regiao, nuvem.perfil, nuvem.endpoint, nuvem.prefixo, nuvem.path_style, nuvem.cdn_dominio, nuvem.cdn_chave_id, nuvem.cdn_parametro, nuvem.fila_jobs, nuvem.fila_eventos, nuvem.topico_catalogo; o modo muda com `nas modo`)", key)
+		return fmt.Errorf("chave desconhecida: %s (use port, tmdb_key, tmdb_lang, scan_every, tunnel, nuvem.bucket, nuvem.regiao, nuvem.perfil, nuvem.endpoint, nuvem.prefixo, nuvem.path_style, nuvem.cdn_dominio, nuvem.cdn_chave_id, nuvem.cdn_parametro, nuvem.fila_jobs, nuvem.fila_eventos, nuvem.topico_catalogo, nuvem.orcamento; o modo muda com `nas modo`)", key)
 	}
 
 	if err := config.Save(cfg); err != nil {

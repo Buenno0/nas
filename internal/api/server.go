@@ -193,6 +193,13 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/uploads/{id}/partes", s.adminOnly(s.handlePartesDoUpload))
 	mux.Handle("POST /api/uploads/{id}/concluir", s.adminOnly(s.handleConcluirUpload))
 	mux.Handle("DELETE /api/uploads/{id}", s.adminOnly(s.handleAbortarUpload))
+	mux.Handle("POST /api/uploads/{id}/diario", s.adminOnly(s.handleDiarioDoUpload))
+
+	// Tela técnica: só leitura, para diagnóstico.
+	mux.Handle("GET /api/tecnico", s.adminOnly(s.handleTecnico))
+	mux.Handle("GET /api/tecnico/custo", s.adminOnly(s.handleCusto))
+	mux.Handle("GET /api/tecnico/diario", s.adminOnly(s.handleDiario))
+	mux.Handle("GET /api/tecnico/eventos", s.adminOnly(s.handleDiarioEventos))
 
 	// Localização: fixar, liberar espaço, enviar, remover da nuvem. As duas
 	// destrutivas (liberar, remover) só nascem daqui, nunca de um evento.
@@ -300,6 +307,7 @@ func (s *Server) Serve(ctx context.Context, addr string) error {
 
 	go s.cleanupLoop(ctx)
 	go s.sincro.Rodar(ctx)
+	go s.diarioDoModo(ctx)
 	go s.amostraLoop(ctx)
 	s.StartBackgroundJobs(ctx)
 

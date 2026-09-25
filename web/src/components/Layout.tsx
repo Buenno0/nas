@@ -9,6 +9,7 @@ import { CartaoDeEnvios } from './CartaoDeEnvios'
 import { Mark } from './Mark'
 import {
   ActivityIcon,
+  ChipIcon,
   ChevronRight,
   NuvemIcon,
   FilmIcon,
@@ -150,6 +151,11 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
         {admin && (
           <NavLink to="/metricas" className={navClass}>
             <ActivityIcon /> Métricas
+          </NavLink>
+        )}
+        {admin && (
+          <NavLink to="/tecnico" className={navClass}>
+            <ChipIcon /> Técnico
           </NavLink>
         )}
         <NavLink to="/settings" className={navClass}>

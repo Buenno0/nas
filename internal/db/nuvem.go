@@ -166,6 +166,16 @@ func (d *DB) UploadPendenteDe(ctx context.Context, origem string) (Upload, error
 		FROM uploads WHERE origem = ? AND estado = 'enviando' ORDER BY id DESC LIMIT 1`, origem))
 }
 
+// UploadAbertoDoNavegador acha um envio do navegador ainda aberto para o
+// mesmo arquivo (biblioteca, nome e tamanho): soltar o arquivo de novo
+// continua esse envio em vez de abrir outro e deixar o primeiro órfão.
+func (d *DB) UploadAbertoDoNavegador(ctx context.Context, libID int64, nome string, tamanho int64) (Upload, error) {
+	return scanUpload(d.QueryRowContext(ctx, `SELECT `+colunasUpload+`
+		FROM uploads WHERE origem = '' AND estado = 'enviando'
+		  AND library_id = ? AND nome = ? AND tamanho = ?
+		ORDER BY id DESC LIMIT 1`, libID, nome, tamanho))
+}
+
 // UploadsPendentes lista os uploads que ainda não terminaram.
 func (d *DB) UploadsPendentes(ctx context.Context) ([]Upload, error) {
 	rows, err := d.QueryContext(ctx, `SELECT `+colunasUpload+`
