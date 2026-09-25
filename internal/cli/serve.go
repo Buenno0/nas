@@ -96,6 +96,14 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string) err
 		SecureCookies: m == modeTunnel,
 		TrustProxy:    m == modeTunnel,
 	})
+	if m == modeLocal {
+		stopDiscovery, err := announceOzymandias(cfg.Port)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "aviso:", err)
+		} else {
+			defer stopDiscovery()
+		}
+	}
 
 	// Primeiro boot: cria o usuário e mostra a senha uma única vez.
 	user, password, created, err := srv.Auth().EnsureInitialUser(ctx)
@@ -113,13 +121,20 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string) err
 	fmt.Printf("\n  Ozymandias %s — modo %s\n", Version, m)
 	if m == modeLocal {
 		fmt.Printf("  http://localhost:%d\n", cfg.Port)
-		// O nome .local não muda quando o roteador troca o IP, então é o
-		// endereço que vale anotar. O QR fica com o IP, que qualquer aparelho
-		// resolve mesmo sem mDNS.
+		shareHost := LANIP()
+		shareLabel := "endereço na rede local; o IP pode mudar"
+		// O nome .local não muda quando o roteador troca o IP. Ele é o endereço
+		// que deve ir ao clipboard e ao QR para o app não precisar ser
+		// reconfigurado a cada troca de Wi-Fi ou renovação do DHCP.
 		if nome := MDNSName(); nome != "" {
-			fmt.Printf("  http://%s:%d  (nome fixo na rede)\n", nome, cfg.Port)
+			shareHost = nome
+			shareLabel = "endereço fixo para colar no celular"
 		}
-		announceShareURL("endereço na rede local", fmt.Sprintf("http://%s:%d", LANIP(), cfg.Port))
+		shareURL := fmt.Sprintf("http://%s:%d", shareHost, cfg.Port)
+		if err := l.SetURL(shareURL); err != nil {
+			fmt.Fprintln(os.Stderr, "aviso: não consegui registrar o endereço local:", err)
+		}
+		announceShareURL(shareLabel, shareURL)
 	} else {
 		fmt.Printf("  http://127.0.0.1:%d  (só nesta máquina)\n", cfg.Port)
 		go runTunnel(ctx, cfg.Port, tunnelName, l)
@@ -164,7 +179,7 @@ func cmdStatus() error {
 	fmt.Printf("rodando em modo %s desde %s\n", info.Mode, info.Started.Format("02/01 15:04"))
 	fmt.Printf("pid %d · porta %d\n", info.PID, info.Port)
 	if info.URL != "" {
-		fmt.Printf("url pública: %s\n", info.URL)
+		fmt.Printf("endereço: %s\n", info.URL)
 	}
 	return nil
 }
@@ -183,6 +198,9 @@ func runMenu(ctx context.Context) int {
 
 	if info, running, err := lock.Current(); err == nil && running {
 		fmt.Printf("  Já existe uma instância no ar (modo %s, pid %d).\n", info.Mode, info.PID)
+		if info.URL != "" {
+			announceShareURL("endereço ativo; pronto para colar no celular", info.URL)
+		}
 		fmt.Println("  Use `nas stop` para encerrar antes de trocar de modo.")
 		return 1
 	}

@@ -35,6 +35,14 @@ type MediaFile struct {
 	ACodec    string    `json:"acodec"`
 	Track     int       `json:"track"`
 	Thumb     string    `json:"thumb"`
+	// Detalhes que decidem compatibilidade com o navegador (migration 0005).
+	PixFmt   string `json:"pix_fmt,omitempty"`
+	VProfile string `json:"vprofile,omitempty"`
+	Channels int    `json:"channels,omitempty"`
+	VBitrate int    `json:"vbitrate,omitempty"`
+	// TakenAt é quando a foto foi tirada, lido do EXIF (migration 0008). Zero
+	// quando o arquivo não diz.
+	TakenAt int64 `json:"taken_at,omitempty"`
 	// DisplayName vem das tags do arquivo (título da faixa em MP3/FLAC).
 	DisplayName string `json:"-"`
 }
@@ -88,8 +96,9 @@ func (d *DB) UpsertFile(ctx context.Context, f MediaFile, probed bool) (int64, e
 		INSERT INTO media_files
 			(library_id, path, rel_path, ext, size, mtime, media_type,
 			 duration, width, height, vcodec, acodec, track, display_name,
+			 pix_fmt, vprofile, channels, vbitrate, taken_at,
 			 probed_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (path) DO UPDATE SET
 			rel_path     = excluded.rel_path,
 			size         = excluded.size,
@@ -102,10 +111,16 @@ func (d *DB) UpsertFile(ctx context.Context, f MediaFile, probed bool) (int64, e
 			acodec       = excluded.acodec,
 			track        = excluded.track,
 			display_name = excluded.display_name,
+			pix_fmt      = excluded.pix_fmt,
+			vprofile     = excluded.vprofile,
+			channels     = excluded.channels,
+			vbitrate     = excluded.vbitrate,
+			taken_at     = excluded.taken_at,
 			probed_at    = COALESCE(excluded.probed_at, media_files.probed_at)
 		RETURNING id`,
 		f.LibraryID, f.Path, f.RelPath, f.Ext, f.Size, f.MTime, string(f.Type),
 		f.Duration, f.Width, f.Height, f.VCodec, f.ACodec, f.Track, f.DisplayName,
+		f.PixFmt, f.VProfile, f.Channels, f.VBitrate, f.TakenAt,
 		probedAt, time.Now().Unix(),
 	).Scan(&id)
 	if err != nil {

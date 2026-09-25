@@ -96,7 +96,7 @@ function LibrariesCard() {
       </div>
 
       {status?.last_error && (
-        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+        <p className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
           {status.last_error}
         </p>
       )}
@@ -129,14 +129,14 @@ function MetadataCard() {
     >
       <p className="mb-3 text-xs">
         {settings?.tmdb_configured ? (
-          <span className="text-emerald-400">Chave configurada.</span>
+          <span className="text-ok">Chave configurada.</span>
         ) : (
           <span className="text-muted">
             Nenhuma chave. Crie a sua em themoviedb.org → Configurações → API.
           </span>
         )}
         {settings && !settings.ffmpeg && (
-          <span className="ml-2 text-amber-400">ffmpeg ausente: sem capas geradas localmente.</span>
+          <span className="ml-2 text-warn">ffmpeg ausente: sem capas geradas localmente.</span>
         )}
       </p>
 
@@ -170,7 +170,7 @@ function MetadataCard() {
         </div>
 
         {save.isError && (
-          <p role="alert" className="text-xs text-red-400">
+          <p role="alert" className="text-xs text-danger">
             {(save.error as Error).message}
           </p>
         )}
@@ -238,7 +238,7 @@ function PasswordCard() {
           className="rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
         />
         {change.isError && (
-          <p role="alert" className="text-xs text-red-400">
+          <p role="alert" className="text-xs text-danger">
             {(change.error as Error).message}
           </p>
         )}

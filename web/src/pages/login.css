@@ -39,33 +39,44 @@
   --lg-sans: 'Archivo', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --lg-mono: 'JetBrains Mono', ui-monospace, monospace;
   font-family: var(--lg-sans);
-  --lg-bg: #0d0f14;
-  --lg-card: #14161d;
-  --lg-field: #0e1015;
-  --lg-line: #23262f;
-  --lg-line-2: #2b3040;
-  --lg-line-3: #3a4152;
-  --lg-text: #f2f3f7;
-  --lg-muted: #8b90a0;
-  --lg-faint: #5f6577;
-  --lg-stone: #333850;
-  --lg-stone-2: #3f4661;
-  --lg-cut: #1a1e2a;
-  --lg-dune-0: #15182190;
-  --lg-dune-1: #191d29;
-  --lg-dune-2: #1e2331;
-  --lg-dune-3: #232939;
-  --lg-mote: #6b7390;
+  /* Basalto e ouro gasto: os mesmos oito tokens do produto, com os extras
+     que só esta cena usa (dunas, pedra, poeira). O escuro era azul-arroxeado
+     e o claro era areia — entrar pela areia e trabalhar no cinza era a
+     contradição nº 1 do sistema. Agora a temperatura é uma só. */
+  --lg-bg: #0c0a08;
+  --lg-card: #16130f;
+  --lg-field: #100d09;
+  --lg-line: #2a231b;
+  --lg-line-2: #3a3126;
+  --lg-line-3: #4d4234;
+  --lg-text: #f4efe4;
+  --lg-muted: #a99a84;
+  --lg-faint: #7a6d5c;
+  --lg-stone: #453a2c;
+  --lg-stone-2: #574a38;
+  --lg-cut: #191510;
+  --lg-dune-0: #14100b90;
+  --lg-dune-1: #191410;
+  --lg-dune-2: #1f1913;
+  --lg-dune-3: #271f17;
+  --lg-mote: #c2ae8e;
   --lg-mote-op: 0.5;
-  --lg-violet: #8b7cff;
-  --lg-violet-2: #4b7bec;
-  --lg-violet-soft: #8b7cff26;
-  --lg-amber: #e0824a;
-  --lg-glow: radial-gradient(120% 90% at 50% -10%, #1e1b3a 0%, #0d0f14 58%);
-  /* O botão repete a construção do logo: corpo violeta, tinta escura.
-     Branco sobre esse violeta dava 3,27:1 e reprovava em contraste. */
-  --lg-btn-bg: #8b7cff;
-  --lg-btn-fg: #12101f;
+  /* A lua só existe no escuro; o claro nem declara estes tokens. */
+  --lg-lua: #ded1b6;
+  --lg-lua-cratera: #c3b28e;
+  --lg-lua-halo: #d29a44;
+  --lg-estrela: #efe7d6;
+  --lg-accent: #d29a44;
+  --lg-accent-ink: #1a1206;
+  --lg-accent-soft: #d29a4426;
+  --lg-danger: #e08163;
+  --lg-ok: #7fb79a;
+  --lg-glow: radial-gradient(120% 90% at 50% -10%, #241a10 0%, #0c0a08 58%);
+  /* O botão deixou de ser exceção: é o mesmo par do botão primário do
+     produto — corpo do acento, tinta escura. Branco sobre o ouro daria
+     2,32:1; a tinta dá 7,45:1. */
+  --lg-btn-bg: #d29a44;
+  --lg-btn-fg: #1a1206;
 }
 
 /* Claro é a paleta de areia, a mesma das telas de erro. */
@@ -73,13 +84,13 @@
   --lg-bg: #f6f3ee;
   --lg-card: #fdfbf7;
   --lg-field: #f1ece4;
-  --lg-line: #e2dbd0;
-  --lg-line-2: #cec5b6;
+  --lg-line: #ddd4c6;
+  --lg-line-2: #d0c4b1;
   --lg-line-3: #b0a695;
   --lg-text: #241e17;
-  --lg-muted: #665e53;
+  --lg-muted: #6b6154;
   --lg-faint: #7d7466;
-  --lg-stone: #2b2118;
+  --lg-stone: #241e17;
   --lg-stone-2: #c98f3c;
   --lg-cut: #f6f3ee;
   --lg-dune-0: #e9e2d6;
@@ -88,15 +99,16 @@
   --lg-dune-3: #d4c9b5;
   --lg-mote: #ffffff;
   --lg-mote-op: 0.75;
-  --lg-violet: #a8642c;
-  --lg-violet-2: #c98f3c;
-  --lg-violet-soft: #a8642c1f;
-  --lg-amber: #9c3f1d;
+  /* A terracota era #a8642c e perdia por 0,01 (4,49 contra 4,5). Escurecida
+     para #9d5a26 passa com 4,84:1 sobre o fundo. */
+  --lg-accent: #9d5a26;
+  --lg-accent-ink: #fdfbf7;
+  --lg-accent-soft: #9d5a261f;
+  --lg-danger: #9c3f1d;
+  --lg-ok: #2f6f52;
   --lg-glow: radial-gradient(120% 90% at 50% -10%, #fffdf9 0%, #f2ece2 60%);
-  /* No claro, a marca é marrom sobre areia: o botão segue igual — tinta
-     sobre papel, e a terracota fica para os links. */
-  --lg-btn-bg: #2b2118;
-  --lg-btn-fg: #f7f4ee;
+  --lg-btn-bg: #9d5a26;
+  --lg-btn-fg: #fdfbf7;
 }
 
 .tela-login {
@@ -126,6 +138,146 @@
   bottom: 0;
   width: 100%;
   height: 58%;
+}
+
+/* ---------- o céu ----------
+
+   Estrelas fixas que cintilam e uma cadente que cruza de tempos em tempos.
+   Fica atrás da lua e das dunas — ordem do DOM é ordem de pintura —, então o
+   halo lava as estrelas próximas e a areia cobre as de baixo sem que
+   ninguém precise recortar o campo à mão. */
+.lg-ceu {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.lg-estrela {
+  animation-name: lg-cintila;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+/* A caixa da cadente é posicionada em porcentagem, não em coordenada do
+   viewBox do campo: o campo usa `slice`, que recorta as laterais quando o
+   contêiner é mais estreito que o viewBox — e a coluna do login é. Ancorado
+   lá dentro, o risco saía de cena na metade do caminho.
+
+   Fica à direita da lua (31%) para os dois não disputarem o mesmo pedaço
+   de céu. */
+.lg-cadente-caixa {
+  position: absolute;
+  top: 13%;
+  left: 52%;
+  width: clamp(150px, 20vw, 260px);
+  height: auto;
+  pointer-events: none;
+}
+
+/* Rara de propósito: 19s de ciclo para 1,3s de risco. Uma que passa a cada
+   dois segundos vira pisca-pisca, não acontecimento. */
+.lg-cadente {
+  opacity: 0;
+  animation: lg-cadente 19s linear infinite;
+}
+
+/* No claro o céu inteiro some, junto com a lua. */
+:root.light .tela-login .lg-ceu,
+:root.light .tela-login .lg-cadente-caixa {
+  display: none;
+}
+
+/* Abaixo de 980px o layout empilha e o céu vira faixa — a mesma razão que
+   esconde a lua ali. */
+@media (max-width: 980px) {
+  .lg-cadente-caixa {
+    display: none;
+  }
+}
+
+/* ---------- a lua ----------
+
+   Só no escuro. A cena clara já tem sol: o degradê `--lg-glow` no topo.
+   Acender as duas coisas ao mesmo tempo daria duas fontes de luz brigando
+   com uma estátua que projeta sombra para um lado só. */
+.lg-lua-caixa {
+  position: absolute;
+  top: 9%;
+  left: 31%;
+  width: clamp(120px, 15vw, 190px);
+  aspect-ratio: 1;
+  pointer-events: none;
+}
+.lg-lua {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* O alvo do ponteiro: só o disco, não o halo. `inset: 27.5%` recorta a área
+   exata dele — r=27 num viewBox de 120 é 45% da caixa, centrado. */
+.lg-lua-alvo {
+  position: absolute;
+  inset: 27.5%;
+  border-radius: 50%;
+}
+/* Uma camada por dono: as duas animam `transform` e, no mesmo elemento, a
+   última declarada apagaria a outra. As telas de erro repetem a estrutura e
+   ainda usam o <svg> de fora para o parallax. */
+.lg-lua-corpo {
+  animation: lg-luaNasce 1.6s cubic-bezier(0.16, 0.84, 0.24, 1) 0.2s backwards;
+}
+.lg-lua-deriva {
+  animation: lg-luaDeriva 90s ease-in-out infinite;
+}
+.lg-lua-halo {
+  animation: lg-luaBrilho 14s ease-in-out infinite;
+}
+
+/* Encostar nela apaga a lua.
+
+   O alvo é um <span> HTML, não o SVG, por duas razões concretas.
+
+   A primeira é o recorte: a caixa do <svg> inclui o halo inteiro, e usá-la
+   apagaria a lua com o ponteiro a meio palmo de distância. `inset: 27.5%`
+   com borda redonda dá exatamente o disco — ele é r=27 num viewBox de 120,
+   ou 45% da caixa, centrado. Encostar no brilho não é encostar na lua.
+
+   A segunda é que o alvo não pode ser a coisa que se apaga. Se o próprio
+   disco fosse o alvo, ao chegar em opacidade 0 ele deixaria de ser
+   atingível, o hover se perderia, a lua voltaria — e ela ficaria piscando
+   com o ponteiro parado em cima. O <span> é invisível desde sempre e nunca
+   muda de opacidade, então o alvo é estável.
+
+   Ele fica ANTES do <svg> no DOM para o combinador irmão alcançá-lo.
+
+   Apagar é mais rápido que reacender — 0,45s contra 1,1s. É o que faz ler
+   como brasa que esfria, e não como elemento que some. */
+@media (hover: hover) {
+  .lg-lua-alvo {
+    pointer-events: auto;
+  }
+  .lg-lua {
+    transition: opacity 1.1s ease-in;
+  }
+  .lg-lua-alvo:hover ~ .lg-lua {
+    opacity: 0;
+    transition: opacity 0.45s ease-out;
+  }
+}
+
+/* No claro ela some. `display: none` e não `opacity: 0` para o halo não
+   continuar clareando o papel. */
+:root.light .tela-login .lg-lua-caixa {
+  display: none;
+}
+
+/* Abaixo de 980px o layout empilha e o céu vira faixa: a lua sairia em cima
+   do título. Mesma decisão que a estátua já toma em 1250px. */
+@media (max-width: 980px) {
+  .lg-lua-caixa {
+    display: none;
+  }
 }
 
 .lg-stage {
@@ -250,8 +402,8 @@
     box-shadow 0.16s ease;
 }
 .lg-wrap:focus-within {
-  border-color: var(--lg-violet);
-  box-shadow: 0 0 0 4px var(--lg-violet-soft);
+  border-color: var(--lg-accent);
+  box-shadow: 0 0 0 4px var(--lg-accent-soft);
 }
 .lg-wrap .lg-lead {
   position: absolute;
@@ -260,7 +412,7 @@
   pointer-events: none;
 }
 .lg-wrap:focus-within .lg-lead {
-  color: var(--lg-violet);
+  color: var(--lg-accent);
 }
 .lg-wrap input {
   width: 100%;
@@ -342,20 +494,21 @@
     transform 0.16s ease;
 }
 .lg-check input:checked + .lg-box {
-  background: var(--lg-violet);
-  border-color: var(--lg-violet);
+  background: var(--lg-accent);
+  border-color: var(--lg-accent);
+  color: var(--lg-accent-ink);
 }
 .lg-check input:checked + .lg-box svg {
   opacity: 1;
   transform: none;
 }
 .lg-check input:focus-visible + .lg-box {
-  box-shadow: 0 0 0 4px var(--lg-violet-soft);
+  box-shadow: 0 0 0 4px var(--lg-accent-soft);
 }
 
 .lg-link {
   font-size: 13px;
-  color: var(--lg-violet);
+  color: var(--lg-accent);
   background: none;
   border: 0;
   padding: 0;
@@ -411,14 +564,14 @@
   gap: 9px;
   padding: 11px 13px;
   border-radius: 10px;
-  background: var(--lg-violet-soft);
+  background: var(--lg-accent-soft);
   border: 1px solid var(--lg-line-2);
   font-size: 13px;
   color: var(--lg-muted);
 }
 .lg-hint.lg-err {
-  background: color-mix(in oklab, var(--lg-amber) 12%, transparent);
-  border-color: color-mix(in oklab, var(--lg-amber) 30%, transparent);
+  background: color-mix(in oklab, var(--lg-danger) 12%, transparent);
+  border-color: color-mix(in oklab, var(--lg-danger) 30%, transparent);
   color: var(--lg-text);
 }
 
@@ -479,8 +632,8 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4ec98a;
-  box-shadow: 0 0 0 3px #4ec98a26;
+  background: var(--lg-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--lg-ok) 15%, transparent);
   animation: lg-pulse 2.6s ease-in-out infinite;
 }
 
@@ -577,6 +730,65 @@
   }
   to {
     transform: translateX(-820px);
+  }
+}
+@keyframes lg-cintila {
+  0%,
+  100% {
+    opacity: 0.26;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+/* O risco todo acontece nos primeiros 7% do ciclo; o resto é o céu vazio
+   esperando a próxima. */
+@keyframes lg-cadente {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  1.4% {
+    opacity: 1;
+  }
+  5.5% {
+    opacity: 1;
+  }
+  7% {
+    opacity: 0;
+    transform: translate(102px, 63px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(102px, 63px);
+  }
+}
+@keyframes lg-luaNasce {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lg-luaDeriva {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-9px);
+  }
+}
+@keyframes lg-luaBrilho {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
   }
 }
 @keyframes lg-gleam {

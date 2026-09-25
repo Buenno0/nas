@@ -34,10 +34,19 @@ var (
 type Service struct {
 	db      *db.DB
 	limiter *Limiter
+
+	// chaveMidia assina os tokens de URL. Sorteada no boot e nunca gravada:
+	// reiniciar o servidor invalida todas as credenciais que estavam à vista
+	// em alguma URL, e isso é uma propriedade, não um efeito colateral.
+	chaveMidia []byte
 }
 
 func NewService(database *db.DB) *Service {
-	return &Service{db: database, limiter: NewLimiter()}
+	chave := make([]byte, 32)
+	// Desde o Go 1.24, rand.Read não devolve erro: ou preenche, ou o processo
+	// morre. Nada de sessão sem entropia.
+	_, _ = rand.Read(chave)
+	return &Service{db: database, limiter: NewLimiter(), chaveMidia: chave}
 }
 
 // EnsureInitialUser cria o primeiro usuário se o banco estiver vazio e devolve
@@ -118,19 +127,32 @@ func (s *Service) Login(ctx context.Context, clientIP, username, password, userA
 	}
 	s.limiter.Reset(clientIP)
 
-	token, err = newToken()
-	if err != nil {
-		return "", db.User{}, 0, err
-	}
-
 	ttl = ShortSessionTTL
 	if remember {
 		ttl = SessionTTL
 	}
-	if err := s.db.CreateSession(ctx, hashToken(token), u.ID, userAgent, time.Now().Add(ttl)); err != nil {
+	token, err = s.IssueSession(ctx, u.ID, userAgent, ttl)
+	if err != nil {
 		return "", db.User{}, 0, err
 	}
 	return token, u, ttl, nil
+}
+
+// IssueSession cria uma sessão para um usuário já autenticado por outro fluxo,
+// como o pareamento de uma TV aprovado no navegador. O token em claro só é
+// devolvido uma vez; o banco continua guardando apenas o hash.
+func (s *Service) IssueSession(ctx context.Context, userID int64, userAgent string, ttl time.Duration) (string, error) {
+	if _, err := s.db.UserByID(ctx, userID); err != nil {
+		return "", err
+	}
+	token, err := newToken()
+	if err != nil {
+		return "", err
+	}
+	if err := s.db.CreateSession(ctx, hashToken(token), userID, userAgent, time.Now().Add(ttl)); err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 // UserFromToken resolve o cookie de sessão.

@@ -26,12 +26,12 @@ func (s *Server) handleRuina(w http.ResponseWriter, r *http.Request) {
 	if err != nil || !codigosPermitidos[code] {
 		// Pedir uma ruína que não existe é, ele mesmo, um 404.
 		s.registraRuina(404)
-		web.ServeError(w, http.StatusNotFound)
+		web.ServeError(w, r, http.StatusNotFound)
 		return
 	}
 
 	s.registraRuina(code)
-	web.ServeError(w, code)
+	web.ServeError(w, r, code)
 }
 
 func (s *Server) registraRuina(code int) {

@@ -3,8 +3,12 @@ import { useTheme } from '../lib/theme'
 // A marca do NAS, inline em SVG: são poucos bytes, então não vale uma
 // requisição de rede — e a troca de tema acontece no mesmo frame, sem piscar.
 //
-// Dois kits de cor: terracota/ouro no tema claro, violeta no escuro. As formas
-// são idênticas; só a paleta muda.
+// Um objeto só, duas iluminações. No claro é a máscara vista à luz: pedra
+// escura, touca de ouro, olhos de areia. No escuro é a mesma máscara vista
+// contra o basalto — o ouro passa a ser o corpo e o resto vira sombra.
+//
+// As cores são as mesmas do produto (ver `index.css`): o corpo é o acento e
+// o vazado é a tinta do acento. Trocar uma coisa sem a outra quebra o par.
 
 interface MarkProps {
   /** Lado do quadrado, em pixels. */
@@ -14,18 +18,18 @@ interface MarkProps {
 
 const paletas = {
   light: {
-    corpo: '#2B2118',
+    corpo: '#241e17', // --ink
+    touca: '#c98f3c',
     toucaOpacidade: 1,
-    touca: '#C98F3C',
-    olhos: '#EFE0C8',
-    play: '#A8642C',
+    olhos: '#f6f3ee', // --bg
+    play: '#9d5a26', // --accent
   },
   dark: {
-    corpo: '#8B7CFF',
-    toucaOpacidade: 0.35,
-    touca: '#0D0F14',
-    olhos: '#0D0F14',
-    play: '#0D0F14',
+    corpo: '#d29a44', // --accent
+    touca: '#1a1206', // --accent-ink
+    toucaOpacidade: 0.38,
+    olhos: '#1a1206',
+    play: '#1a1206',
   },
 } as const
 

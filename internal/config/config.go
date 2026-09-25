@@ -22,6 +22,19 @@ type Config struct {
 	TMDBLang  string `json:"tmdb_lang"`
 	ScanEvery string `json:"scan_every"`  // duração Go, ex: "6h". Vazio desliga.
 	Tunnel    string `json:"tunnel_name"` // vazio = quick tunnel
+
+	// Transcodificação sob demanda.
+	//
+	// CacheGB é o orçamento do cache de arquivos preparados; ReservaGB é o
+	// espaço livre que o NAS nunca consome — o cache divide o volume com o
+	// nas.db, e encher o disco derrubaria login e progresso, não só a
+	// reprodução. Trabalhos limita quantos ffmpeg rodam juntos: o motor de
+	// hardware da Apple tem vazão fixa, então mais processos só repartem a
+	// mesma banda.
+	Transcode bool    `json:"transcode"`
+	CacheGB   float64 `json:"cache_gb"`
+	ReservaGB float64 `json:"reserva_gb"`
+	Trabalhos int     `json:"trabalhos"`
 }
 
 // Default devolve a configuração usada no primeiro boot.
@@ -30,6 +43,10 @@ func Default() Config {
 		Port:      8787,
 		TMDBLang:  "pt-BR",
 		ScanEvery: "6h",
+		Transcode: true,
+		CacheGB:   8,
+		ReservaGB: 5,
+		Trabalhos: 2,
 	}
 }
 
@@ -48,7 +65,7 @@ func EnsureDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, sub := range []string{"", "cache/posters", "cache/thumbs"} {
+	for _, sub := range []string{"", "cache/posters", "cache/thumbs", "cache/preparados"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			return "", fmt.Errorf("criando %s: %w", filepath.Join(dir, sub), err)
 		}
@@ -64,12 +81,13 @@ func pathIn(name string) (string, error) {
 	return filepath.Join(dir, name), nil
 }
 
-func FilePath() (string, error)  { return pathIn("config.json") }
-func DBPath() (string, error)    { return pathIn("nas.db") }
-func PIDPath() (string, error)   { return pathIn("nas.pid") }
-func LogPath() (string, error)   { return pathIn("nas.log") }
-func PosterDir() (string, error) { return pathIn("cache/posters") }
-func ThumbDir() (string, error)  { return pathIn("cache/thumbs") }
+func FilePath() (string, error)   { return pathIn("config.json") }
+func DBPath() (string, error)     { return pathIn("nas.db") }
+func PIDPath() (string, error)    { return pathIn("nas.pid") }
+func LogPath() (string, error)    { return pathIn("nas.log") }
+func PosterDir() (string, error)  { return pathIn("cache/posters") }
+func ThumbDir() (string, error)   { return pathIn("cache/thumbs") }
+func PrepareDir() (string, error) { return pathIn("cache/preparados") }
 
 // Load lê a configuração, criando o arquivo padrão se ele ainda não existir.
 func Load() (Config, error) {
@@ -98,6 +116,15 @@ func Load() (Config, error) {
 	}
 	if cfg.Port <= 0 || cfg.Port > 65535 {
 		cfg.Port = Default().Port
+	}
+	if cfg.CacheGB <= 0 {
+		cfg.CacheGB = Default().CacheGB
+	}
+	if cfg.ReservaGB <= 0 {
+		cfg.ReservaGB = Default().ReservaGB
+	}
+	if cfg.Trabalhos <= 0 || cfg.Trabalhos > 8 {
+		cfg.Trabalhos = Default().Trabalhos
 	}
 	return cfg, nil
 }

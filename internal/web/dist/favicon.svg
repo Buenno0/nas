@@ -1,17 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
   <style>
     /* Mesma geometria e mesmas cores da marca do app: corpo, touca, olhos e
-       o play. Claro é a paleta de areia; escuro, a violeta. O favicon segue o
-       tema do sistema, que é o único sinal que uma aba consegue ler. */
-    .corpo { fill: #2b2118 }
+       o play. Claro é pedra sobre papel; escuro, o ouro gasto contra o
+       basalto. O favicon segue o tema do sistema, que é o único sinal que
+       uma aba consegue ler. */
+    .corpo { fill: #241e17 }
     .touca { fill: #c98f3c; opacity: 1 }
-    .olhos { fill: #efe0c8 }
-    .play  { fill: #a8642c }
+    .olhos { fill: #f6f3ee }
+    .play  { fill: #9d5a26 }
     @media (prefers-color-scheme: dark) {
-      .corpo { fill: #8b7cff }
-      .touca { fill: #0d0f14; opacity: 0.35 }
-      .olhos { fill: #0d0f14 }
-      .play  { fill: #0d0f14 }
+      .corpo { fill: #d29a44 }
+      .touca { fill: #1a1206; opacity: 0.38 }
+      .olhos { fill: #1a1206 }
+      .play  { fill: #1a1206 }
     }
   </style>
   <path class="corpo" d="M18 22 C18 14 27 9 48 9 C69 9 78 14 78 22 L78 52 C78 68 66 80 48 87 C30 80 18 68 18 52 Z"/>

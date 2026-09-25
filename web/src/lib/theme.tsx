@@ -43,7 +43,7 @@ function aplicarNoDocumento(tema: Theme) {
   }
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', tema === 'light' ? '#f6f7fa' : '#0a0b0e')
+    ?.setAttribute('content', tema === 'light' ? '#f6f3ee' : '#0c0a08')
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

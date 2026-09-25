@@ -1,5 +1,24 @@
 @import 'tailwindcss';
 
+/* JetBrains Mono, servida pelo próprio NAS (nenhuma requisição a terceiros).
+   O login e as telas de erro já a declaravam; o produto passa a usá-la nos
+   micro-rótulos e no tempo do player, que é onde o mono significa alguma
+   coisa — número que não dança quando o segundo vira. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-400-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-500-latin.woff2') format('woff2');
+}
+
 /* O tema é trocado por classe no <html>, não por prefers-color-scheme:
    escuro é o padrão do produto e a escolha da pessoa vence o sistema. */
 @custom-variant light (&:where(.light, .light *));
@@ -14,32 +33,60 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
 
+  /* Semânticas: existem porque "verde" e "vermelho" soltos em classe
+     utilitária eram a única cor fora do sistema. Aqui elas também são
+     ruína — pátina de bronze, ocre e óxido, não o verde/vermelho de UI. */
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+
   --font-sans:
     ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
     sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* ---------- paleta ruína ----------
+
+   Uma paleta só, do login à tela de 500. O produto era cinza frio com acento
+   violeta e a pessoa saía da areia do login para cair no cinza; agora a
+   escala inteira é quente e o acento é o ouro gasto da touca da máscara.
+
+   Quatro níveis de profundidade (bg → surface → elev → borda) e nada além
+   disso: nenhuma sombra eleva cartão, separação é sempre borda de 1px.
+
+   Todos os pares foram medidos com `node scripts/contraste.mjs`. */
 
 :root,
 .dark {
-  --bg: #0a0b0e;
-  --surface: #141720;
-  --elev: #1c2029;
-  --line: #262b37;
-  --ink: #eef1f7;
-  --muted: #98a2b8;
-  --accent: #7c6cff;
-  --accent-ink: #ffffff;
+  /* Escuro: basalto. A pedra à noite, não o cinza de painel. */
+  --bg: #0c0a08;
+  --surface: #16130f;
+  --elev: #211c15;
+  --line: #40372b;
+  --ink: #f4efe4;
+  --muted: #a99a84;
+  --accent: #d29a44; /* ouro gasto — a mesma touca da marca */
+  --accent-ink: #1a1206; /* tinta sobre o ouro; branco reprovava em contraste */
+  --ok: #7fb79a; /* pátina de bronze */
+  --warn: #dca84a;
+  --danger: #e08163; /* óxido */
 }
 
 .light {
-  --bg: #f6f7fa;
-  --surface: #ffffff;
-  --elev: #eef1f6;
-  --line: #e0e5ee;
-  --ink: #12141c;
-  --muted: #566072;
-  --accent: #5b45f5;
-  --accent-ink: #ffffff;
+  /* Claro: papel morno. Não é a areia saturada de antes — a diferença entre
+     canal vermelho e azul do fundo é 8, contra 39 da areia antiga. */
+  --bg: #f6f3ee;
+  --surface: #fdfbf7;
+  --elev: #efe9df;
+  --line: #d0c4b1;
+  --ink: #241e17;
+  --muted: #6b6154;
+  --accent: #9d5a26; /* terracota */
+  --accent-ink: #fdfbf7;
+  --ok: #2f6f52;
+  --warn: #8a5a12;
+  --danger: #9c3f1d;
 }
 
 html,
@@ -54,6 +101,46 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+}
+
+/* Micro-rótulo: o mono maiúsculo espaçado que marca seção e metadado. Estava
+   repetido como pilha de utilitários em quatro lugares, cada um com um
+   tamanho e um tracking diferente.
+
+   Vive na camada `components` de propósito: assim `text-accent` ou
+   `text-[11px]` no mesmo elemento ainda vencem, como qualquer utilitário
+   vence um componente. */
+@layer components {
+  .rotulo {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+/* Sala escura: qualquer chrome desenhado POR CIMA de mídia — o player, o hero
+   da home, o poço do pôster. Ali a cena é escura nos dois temas, então os
+   tokens do tema claro não valem.
+
+   Sem isto, o tema claro colocaria a terracota (#9d5a26) e o ocre (#8a5a12)
+   em cima de um vídeo preto ou de um degradê preto sobre a capa — botão
+   escuro sobre fundo escuro. Com o acento violeta antigo o problema não
+   aparecia, porque ele tinha luminosidade parecida nos dois temas; foi a
+   paleta quente que tornou a regra necessária.
+
+   Fixa só o que é desenhado sobre a mídia; `--bg`, `--surface` e `--line`
+   continuam vindo do tema, porque ali nada os usa. */
+.sala-escura {
+  --accent: #d29a44;
+  --accent-ink: #1a1206;
+  --ink: #f4efe4;
+  --muted: #a99a84;
+  --ok: #7fb79a;
+  --warn: #dca84a;
+  --danger: #e08163;
 }
 
 /* Prateleiras horizontais: rolam sem barra visível. */

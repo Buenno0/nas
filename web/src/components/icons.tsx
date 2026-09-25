@@ -164,3 +164,47 @@ export const WarningIcon = (p: IconProps) => (
     <path d="M12 10v4M12 17.2v.1" />
   </Icon>
 )
+
+export const ActivityIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 12h4l3-7 4 14 3-7h6" />
+  </Icon>
+)
+
+export const ClockIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5.2l3.4 2" />
+  </Icon>
+)
+
+export const ChipIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="7" y="7" width="10" height="10" rx="1.5" />
+    <path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4" />
+  </Icon>
+)
+
+export const DiskIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <ellipse cx="12" cy="6" rx="8" ry="3" />
+    <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
+    <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+  </Icon>
+)
+
+export const ShuffleIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 6h3.5l4 5.5M3 18h3.5l4-5.5" />
+    <path d="M14 6h4.5m0 0L16 3.5M18.5 6 16 8.5" />
+    <path d="M14 18h4.5m0 0L16 15.5M18.5 18 16 20.5" />
+    <path d="M12.5 8.2 14 6M12.5 15.8 14 18" />
+  </Icon>
+)
+
+export const ListIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 6h13M8 12h13M8 18h13" />
+    <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+  </Icon>
+)

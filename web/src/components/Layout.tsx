@@ -6,9 +6,11 @@ import { useTheme } from '../lib/theme'
 import { MiniPlayer } from './MiniPlayer'
 import { Mark } from './Mark'
 import {
+  ActivityIcon,
   ChevronRight,
   FilmIcon,
   HomeIcon,
+  ListIcon,
   LogoutIcon,
   MoonIcon,
   MusicIcon,
@@ -79,10 +81,17 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
         <NavLink to="/search" className={navClass}>
           <SearchIcon /> Buscar
         </NavLink>
+        {/* Só faz sentido com música indexada: um link para uma lista vazia
+            é pior que link nenhum. */}
+        {libraries.some((l) => l.kind === 'music') && (
+          <NavLink to="/artistas" className={navClass}>
+            <MusicIcon /> Artistas
+          </NavLink>
+        )}
       </nav>
 
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-        <p className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wider text-muted uppercase">
+        <p className="rotulo px-3 pt-2 pb-1">
           Bibliotecas
         </p>
         {libraries.length === 0 && (
@@ -104,6 +113,15 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
       </div>
 
       <div className="flex flex-col gap-1">
+        <NavLink to="/colecoes" className={navClass}>
+          <ListIcon /> Coleções
+        </NavLink>
+        {/* Telemetria é tela de admin; a rota HTTP já recusa as outras contas. */}
+        {admin && (
+          <NavLink to="/metricas" className={navClass}>
+            <ActivityIcon /> Métricas
+          </NavLink>
+        )}
         <NavLink to="/settings" className={navClass}>
           <SettingsIcon /> {admin ? 'Configurações' : 'Minha conta'}
         </NavLink>
@@ -131,10 +149,10 @@ function RuinasMenu() {
         aria-controls="menu-ruinas-sidebar"
         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-muted transition hover:bg-elev/60 hover:text-ink"
       >
-        <WarningIcon className="shrink-0 text-amber-400" />
+        <WarningIcon className="shrink-0 text-warn" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-ink">Ruínas</span>
-          <span className="block truncate text-[10px] font-semibold tracking-wide text-accent uppercase">
+          <span className="rotulo block truncate text-accent">
             Escolha como tudo termina
           </span>
         </span>
@@ -155,21 +173,21 @@ function RuinasMenu() {
               href="/ruinas/401"
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
             >
-              <span className="font-mono font-semibold text-violet-400">401</span>
+              <span className="font-mono font-semibold text-accent">401</span>
               <span>Entrada proibida</span>
             </a>
             <a
               href="/ruinas/404"
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
             >
-              <span className="font-mono font-semibold text-amber-400">404</span>
+              <span className="font-mono font-semibold text-warn">404</span>
               <span>Caminho perdido</span>
             </a>
             <a
               href="/ruinas/500"
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
             >
-              <span className="font-mono font-semibold text-rose-400">500</span>
+              <span className="font-mono font-semibold text-danger">500</span>
               <span>Colapso final</span>
             </a>
           </div>

@@ -12,33 +12,71 @@ const needsConversion = (ext: string) => ['.heic', '.heif', '.avif'].includes(ex
 const fullUrl = (file: FileInfo) =>
   needsConversion(file.ext) ? thumbUrl(file.id, 1600) : streamUrl(file.id)
 
+/**
+ * Agrupa por mês, preservando a ordem que veio do servidor (mais recente
+ * primeiro). O índice global de cada foto é guardado junto: o lightbox navega
+ * pela galeria inteira, atravessando os meses, e não por um mês só.
+ */
+function porMes(photos: FileInfo[]) {
+  const meses: { chave: string; rotulo: string; itens: { photo: FileInfo; i: number }[] }[] = []
+
+  photos.forEach((photo, i) => {
+    if (!photo.quando) {
+      const solto = meses.find((m) => m.chave === 'sem-data')
+      if (solto) solto.itens.push({ photo, i })
+      else meses.push({ chave: 'sem-data', rotulo: 'Sem data', itens: [{ photo, i }] })
+      return
+    }
+    const d = new Date(photo.quando * 1000)
+    const chave = `${d.getFullYear()}-${d.getMonth()}`
+    const atual = meses[meses.length - 1]
+    if (atual && atual.chave === chave) {
+      atual.itens.push({ photo, i })
+      return
+    }
+    meses.push({
+      chave,
+      rotulo: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+      itens: [{ photo, i }],
+    })
+  })
+
+  return meses
+}
+
+const grade = 'grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 md:grid-cols-6 xl:grid-cols-8'
+
 export function PhotoGrid({ photos }: { photos: FileInfo[] }) {
   const [open, setOpen] = useState<number | null>(null)
 
   if (photos.length === 0) return null
 
+  const meses = porMes(photos)
+  // Uma única faixa de tempo não é linha do tempo: o cabeçalho seria só ruído.
+  const agrupar = meses.length > 1
+
   return (
     <>
-      <ul className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 md:grid-cols-6 xl:grid-cols-8">
-        {photos.map((photo, i) => (
-          <li key={photo.id} className="contain-content">
-            <button
-              type="button"
-              onClick={() => setOpen(i)}
-              className="group block aspect-square w-full overflow-hidden rounded-lg bg-elev"
-              aria-label={`Abrir ${photo.name}`}
-            >
-              <img
-                src={thumbUrl(photo.id)}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
-              />
-            </button>
-          </li>
-        ))}
-      </ul>
+      {agrupar ? (
+        <div className="space-y-8">
+          {meses.map((mes) => (
+            <section key={mes.chave}>
+              <h3 className="mb-2 text-sm font-semibold first-letter:uppercase">{mes.rotulo}</h3>
+              <ul className={grade}>
+                {mes.itens.map(({ photo, i }) => (
+                  <Miniatura key={photo.id} photo={photo} onOpen={() => setOpen(i)} />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <ul className={grade}>
+          {photos.map((photo, i) => (
+            <Miniatura key={photo.id} photo={photo} onOpen={() => setOpen(i)} />
+          ))}
+        </ul>
+      )}
 
       {open !== null && (
         <Lightbox
@@ -49,6 +87,27 @@ export function PhotoGrid({ photos }: { photos: FileInfo[] }) {
         />
       )}
     </>
+  )
+}
+
+function Miniatura({ photo, onOpen }: { photo: FileInfo; onOpen: () => void }) {
+  return (
+    <li className="contain-content">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="group block aspect-square w-full overflow-hidden rounded-lg bg-elev"
+        aria-label={`Abrir ${photo.name}`}
+      >
+        <img
+          src={thumbUrl(photo.id)}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+        />
+      </button>
+    </li>
   )
 }
 

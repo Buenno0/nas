@@ -67,13 +67,16 @@ export function Login() {
       <div className="lg-shell">
         <section className="lg-stage">
           <div className="lg-dunes-clip">
+            <Ceu />
+            <Cadente />
+            <Lua />
             <Dunas />
           </div>
 
           <div className="lg-mark">
             {/* A marca do app, não um selo próprio: assim ela acompanha o tema
-                — violeta no escuro, terracota no claro — em vez de ficar um
-                quadrado violeta em cima da areia. */}
+                — ouro no escuro, pedra e ouro no claro — em vez de ficar um
+                selo solto em cima da areia. */}
             <Mark size={42} />
             <div>
               <div className="lg-name">Ozymandias</div>
@@ -223,7 +226,7 @@ export function Login() {
                     height="11"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#fff"
+                    stroke="currentColor"
                     strokeWidth="3.4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -310,7 +313,6 @@ export function Login() {
   )
 }
 
-
 /** Poeira que sobe pelas dunas. Cada grão tem duração e atraso próprios para
  *  o movimento não ficar sincronizado. */
 const graos = [
@@ -322,6 +324,181 @@ const graos = [
   { cx: 648, cy: 210, r: 1.3, duracao: '16s', atraso: '-7s' },
   { cx: 762, cy: 192, r: 2, duracao: '22s', atraso: '-11s' },
 ]
+
+/** Estrelas. Cada uma cintila no seu próprio ritmo — duração e atraso
+ *  distintos, senão o céu inteiro pisca junto e parece um LED.
+ *
+ *  Coordenadas no viewBox 0 0 800 400, ancorado no topo. `cy` para em 232
+ *  porque abaixo disso são as dunas: estrela em cima de areia é erro de
+ *  desenho, não de opacidade. */
+const estrelas = [
+  { cx: 38, cy: 52, r: 1.1, duracao: '6.5s', atraso: '-0.4s' },
+  { cx: 96, cy: 118, r: 0.8, duracao: '8.0s', atraso: '-3.1s' },
+  { cx: 134, cy: 30, r: 1.4, duracao: '5.5s', atraso: '-1.9s' },
+  { cx: 168, cy: 176, r: 0.9, duracao: '9.0s', atraso: '-5.6s' },
+  { cx: 212, cy: 76, r: 1.2, duracao: '7.0s', atraso: '-2.3s' },
+  { cx: 247, cy: 142, r: 0.7, duracao: '6.0s', atraso: '-4.8s' },
+  { cx: 286, cy: 24, r: 1.0, duracao: '8.5s', atraso: '-0.9s' },
+  { cx: 318, cy: 196, r: 1.3, duracao: '5.0s', atraso: '-6.2s' },
+  { cx: 352, cy: 96, r: 0.8, duracao: '7.5s', atraso: '-3.7s' },
+  { cx: 391, cy: 46, r: 1.5, duracao: '6.2s', atraso: '-1.2s' },
+  { cx: 424, cy: 158, r: 1.0, duracao: '9.5s', atraso: '-5.1s' },
+  { cx: 462, cy: 108, r: 0.7, duracao: '5.8s', atraso: '-2.6s' },
+  { cx: 498, cy: 62, r: 1.2, duracao: '8.2s', atraso: '-4.3s' },
+  { cx: 531, cy: 208, r: 0.9, duracao: '6.8s', atraso: '-0.6s' },
+  { cx: 569, cy: 34, r: 1.1, duracao: '7.8s', atraso: '-6.9s' },
+  { cx: 604, cy: 128, r: 1.4, duracao: '5.3s', atraso: '-2.0s' },
+  { cx: 641, cy: 88, r: 0.8, duracao: '9.2s', atraso: '-4.6s' },
+  { cx: 676, cy: 182, r: 1.0, duracao: '6.6s', atraso: '-1.5s' },
+  { cx: 712, cy: 56, r: 1.3, duracao: '8.8s', atraso: '-3.4s' },
+  { cx: 748, cy: 146, r: 0.9, duracao: '5.6s', atraso: '-5.9s' },
+  { cx: 778, cy: 98, r: 1.1, duracao: '7.2s', atraso: '-2.8s' },
+  { cx: 62, cy: 172, r: 1.0, duracao: '8.6s', atraso: '-6.4s' },
+  { cx: 270, cy: 116, r: 0.9, duracao: '6.4s', atraso: '-1.7s' },
+  { cx: 452, cy: 226, r: 0.8, duracao: '7.6s', atraso: '-4.1s' },
+  { cx: 588, cy: 152, r: 0.7, duracao: '9.8s', atraso: '-0.2s' },
+  { cx: 156, cy: 100, r: 1.2, duracao: '6.9s', atraso: '-5.3s' },
+]
+
+/**
+ * A lua da cena — só no tema escuro.
+ *
+ * Ela não é enfeite: é a fonte de luz que faltava. A cena escura tinha uma
+ * estátua com a touca dourada e nada explicando de onde vinha o ouro. O CSS
+ * a esconde no claro (lá o sol é o degradê `--lg-glow`); o SVG fica no DOM
+ * nos dois casos, porque `display: none` é mais barato que remontar a árvore
+ * a cada troca de tema — e a troca acontece dentro de uma View Transition.
+ *
+ * Gibosa minguante: o disco é comido por um segundo círculo deslocado. Meia
+ * lua exata ficaria geométrica demais ao lado de uma estátua gasta.
+ */
+/**
+ * O campo de estrelas. Só no escuro, como a lua.
+ *
+ * Fica atrás da lua e das dunas na ordem de pintura, que é a ordem do DOM:
+ * o halo lava as estrelas que ficam perto, e a areia cobre as de baixo. Isso
+ * poupa recortar o campo à mão.
+ */
+function Ceu() {
+  return (
+    <svg
+      className="lg-ceu"
+      viewBox="0 0 800 400"
+      preserveAspectRatio="xMidYMin slice"
+      aria-hidden="true"
+    >
+      {estrelas.map((e) => (
+        <circle
+          key={`${e.cx}-${e.cy}`}
+          className="lg-estrela"
+          cx={e.cx}
+          cy={e.cy}
+          r={e.r}
+          fill="var(--lg-estrela)"
+          style={{ animationDuration: e.duracao, animationDelay: e.atraso }}
+        />
+      ))}
+    </svg>
+  )
+}
+
+/**
+ * A estrela cadente, num elemento próprio.
+ *
+ * Ela não vive dentro do campo de estrelas de propósito. O campo usa
+ * `preserveAspectRatio="slice"`, que recorta as laterais quando o contêiner é
+ * mais estreito que o viewBox — e a coluna do login é. Um risco ancorado em
+ * coordenada de viewBox saía de cena na metade do caminho. Aqui a caixa é
+ * posicionada em porcentagem, como a lua, e o trajeto inteiro cabe dentro
+ * dela em qualquer largura.
+ */
+function Cadente() {
+  return (
+    <svg className="lg-cadente-caixa" viewBox="0 0 160 100" aria-hidden="true">
+      <defs>
+        {/* O rastro acende na direção do movimento: transparente na cauda,
+            cheio na cabeça. */}
+        <linearGradient id="lg-rastro" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="var(--lg-estrela)" stopOpacity="0" />
+          <stop offset="100%" stopColor="var(--lg-estrela)" stopOpacity="0.9" />
+        </linearGradient>
+      </defs>
+      <g className="lg-cadente">
+        <line
+          x1="2"
+          y1="2"
+          x2="52"
+          y2="33"
+          stroke="url(#lg-rastro)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <circle cx="52" cy="33" r="1.7" fill="var(--lg-estrela)" />
+      </g>
+    </svg>
+  )
+}
+
+function Lua() {
+  return (
+    <div className="lg-lua-caixa">
+      {/* O alvo do ponteiro é este <span>, não o SVG.
+ 
+          O disco é um <g> dentro do SVG, e `:hover` sobre grupo SVG não
+          invalida estilo direito neste motor: o sinalizador vira, o estilo
+          computado fica um estado atrás — apaga ao sair e acende ao entrar.
+          Nas telas de erro o defeito se escondia, porque o parallax escreve
+          transform inline a cada movimento e força o recálculo.
+ 
+          Um elemento HTML não tem esse problema. `inset: 27.5%` recorta
+          exatamente o disco: ele é r=27 num viewBox de 120, ou 45% da caixa,
+          centrado. O halo fica de fora do alvo de propósito — encostar no
+          brilho não é encostar na lua. */}
+      <span className="lg-lua-alvo" aria-hidden="true" />
+      <svg className="lg-lua" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <radialGradient id="lg-lua-halo">
+            <stop offset="34%" stopColor="var(--lg-lua-halo)" stopOpacity="0.4" />
+            <stop offset="62%" stopColor="var(--lg-lua-halo)" stopOpacity="0.11" />
+            <stop offset="100%" stopColor="var(--lg-lua-halo)" stopOpacity="0" />
+          </radialGradient>
+          {/* Branco é o que fica; preto é o que a sombra come.
+              A fase se constrói em três passos, e a ordem importa: o disco
+              inteiro, o meio da direita apagado, e uma elipse acesa de volta.
+              É essa elipse que faz o terminador arquear para o lado escuro —
+              um segundo círculo mordendo a borda arqueia para o lado errado e
+              produz uma foice, não uma gibosa. rx=12 sobre ry=27 dá 72% de
+              face iluminada. */}
+          <mask id="lg-lua-gibosa">
+            <rect width="120" height="120" fill="#000" />
+            <circle cx="60" cy="60" r="27" fill="#fff" />
+            <rect x="60" y="0" width="60" height="120" fill="#000" />
+            <ellipse cx="60" cy="60" rx="12" ry="27" fill="#fff" />
+          </mask>
+        </defs>
+
+        {/* Uma camada por dono: as duas animam `transform` e, empilhadas no
+            mesmo elemento, a última declarada apagaria a outra. Nas telas de
+            erro há ainda uma terceira camada — o próprio <svg>, que recebe o
+            parallax por style inline. */}
+        <g className="lg-lua-corpo">
+          <g className="lg-lua-deriva">
+            <circle className="lg-lua-halo" cx="60" cy="60" r="58" fill="url(#lg-lua-halo)" />
+            <g mask="url(#lg-lua-gibosa)">
+              <circle cx="60" cy="60" r="27" fill="var(--lg-lua)" />
+              {/* As crateras repetem as órbitas vazadas da máscara: a mesma
+                  pedra gasta, na mesma paleta. */}
+              <circle cx="49" cy="51" r="5.5" fill="var(--lg-lua-cratera)" />
+              <circle cx="43" cy="67" r="3.4" fill="var(--lg-lua-cratera)" />
+              <circle cx="54" cy="72" r="2.2" fill="var(--lg-lua-cratera)" />
+              <circle cx="40" cy="55" r="2" fill="var(--lg-lua-cratera)" />
+            </g>
+          </g>
+        </g>
+      </svg>
+    </div>
+  )
+}
 
 function Dunas() {
   return (

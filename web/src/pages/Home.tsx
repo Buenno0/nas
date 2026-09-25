@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { api, type ContinueItem, type TitleCard } from '../lib/api'
+import { api, type ContinueItem, type FotoDoDia, type TitleCard } from '../lib/api'
 import { clockTime, gradientFor, humanDuration, kindLabel } from '../lib/format'
 import { Poster, PosterSkeleton } from '../components/Poster'
 import { Row, RowItem } from '../components/Row'
@@ -62,6 +62,18 @@ export function Home() {
         </Row>
       )}
 
+      {data && data.no_dia && data.no_dia.length > 0 && <NoDia fotos={data.no_dia} />}
+
+      {data && data.esquecidos && data.esquecidos.length > 0 && (
+        <Row title="Esquecidos">
+          {data.esquecidos.map((item) => (
+            <div key={item.file_id} className="w-56 shrink-0 snap-start sm:w-64">
+              <ContinueCard item={item} />
+            </div>
+          ))}
+        </Row>
+      )}
+
       {data?.rows.map((row) => (
         <Row key={row.key} title={row.title}>
           {row.items.map((item) => (
@@ -75,10 +87,44 @@ export function Home() {
   )
 }
 
+/**
+ * Fotos tiradas neste mesmo dia, em anos anteriores. É a única prateleira que
+ * muda sozinha todo dia — e a única que depende de uma data que o arquivo
+ * carrega, não de algo que alguém digitou.
+ */
+function NoDia({ fotos }: { fotos: FotoDoDia[] }) {
+  const anos = new Set(fotos.map((f) => new Date((f.quando ?? 0) * 1000).getFullYear()))
+  const legenda =
+    anos.size === 1
+      ? `${[...anos][0]}`
+      : `${Math.min(...anos)}–${Math.max(...anos)}`
+
+  return (
+    <Row title={`Neste dia · ${legenda}`}>
+      {fotos.map((foto) => (
+        <div key={foto.id} className="w-32 shrink-0 snap-start sm:w-40">
+          <Link to={`/title/${foto.title_id}`} className="block" aria-label={foto.name}>
+            <img
+              src={`/img/file/${foto.id}?w=320`}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="aspect-square w-full rounded-xl object-cover ring-1 ring-line"
+            />
+          </Link>
+          <p className="mt-1.5 text-xs text-muted">
+            {new Date((foto.quando ?? 0) * 1000).getFullYear()}
+          </p>
+        </div>
+      ))}
+    </Row>
+  )
+}
+
 function Hero({ title }: { title: TitleCard }) {
   return (
     <section className="px-4 sm:px-6">
-      <div className="relative overflow-hidden rounded-2xl ring-1 ring-line">
+      <div className="sala-escura relative overflow-hidden rounded-2xl ring-1 ring-line">
         <div
           className="absolute inset-0"
           style={
@@ -104,7 +150,7 @@ function Hero({ title }: { title: TitleCard }) {
           <div className="mt-1">
             <Link
               to={`/title/${title.id}`}
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink transition hover:opacity-90"
             >
               <PlayIcon /> Abrir
             </Link>
@@ -124,7 +170,7 @@ function ContinueCard({ item }: { item: ContinueItem }) {
       to={`/watch/${item.file_id}`}
       className="group block overflow-hidden rounded-xl ring-1 ring-line transition hover:ring-accent"
     >
-      <div className="relative aspect-video">
+      <div className="sala-escura relative aspect-video">
         <div
           className="absolute inset-0"
           style={

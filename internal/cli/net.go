@@ -3,6 +3,8 @@ package cli
 import (
 	"net"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -10,15 +12,37 @@ import (
 // "macbook-air-de-mateus.local". Vale mais que o IP: não muda quando o
 // roteador dá outro endereço. Vazio quando o sistema não expõe um nome .local.
 func MDNSName() string {
+	// No macOS, os.Hostname pode devolver "unknown" mesmo quando o Bonjour
+	// está configurado. LocalHostName é a fonte de verdade que o sistema
+	// anuncia na rede e permanece estável quando o roteador troca o IP.
+	if runtime.GOOS == "darwin" {
+		if output, err := exec.Command("scutil", "--get", "LocalHostName").Output(); err == nil {
+			if host := normalizeMDNSName(string(output), true); host != "" {
+				return host
+			}
+		}
+	}
+
 	host, err := os.Hostname()
 	if err != nil {
 		return ""
 	}
-	host = strings.TrimSuffix(host, ".")
-	if !strings.HasSuffix(strings.ToLower(host), ".local") {
+	return normalizeMDNSName(host, false)
+}
+
+func normalizeMDNSName(value string, acceptsBareName bool) string {
+	host := strings.TrimSpace(strings.TrimSuffix(value, "."))
+	switch strings.ToLower(host) {
+	case "", "unknown", "localhost":
 		return ""
 	}
-	return host
+	if strings.HasSuffix(strings.ToLower(host), ".local") {
+		return host
+	}
+	if acceptsBareName {
+		return host + ".local"
+	}
+	return ""
 }
 
 // LANIP tenta descobrir o IP da máquina na rede local, para imprimir uma URL

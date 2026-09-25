@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#0d0f14">
+<meta name="theme-color" content="#0c0a08">
 <title>404 — Ozymandias</title>
 <link rel="icon" href="/telas-erro/ozymandias-favicon.svg">
 <script>
@@ -17,7 +17,7 @@
       var theme = saved === 'light' || (saved !== 'dark' && systemLight) ? 'light' : 'dark';
       document.documentElement.classList.add(theme);
       document.documentElement.style.colorScheme = theme;
-      document.querySelector('meta[name="theme-color"]').content = theme === 'light' ? '#efe0c8' : '#0d0f14';
+      document.querySelector('meta[name="theme-color"]').content = theme === 'light' ? '#f6f3ee' : '#0c0a08';
     } catch (e) {}
   })();
 </script>
@@ -37,38 +37,40 @@
 </style>
 <style>
   :root {
-    --bg: #0d0f14; --bg-2: #101219; --line: #1c1f27; --line-2: #2b3040;
-    --text: #f2f3f7; --muted: #8b90a0; --faint: #5f6577;
-    --numeral: #161a24;
-    --stone: #333850; --stone-2: #3f4661; --cut: #1a1e2a;
-    --dune-0: #15182190; --dune-1: #191d29; --dune-2: #1e2331; --dune-3: #232939;
-    --mote: #6b7390; --mote-op: 0.5;
-    --violet: #8b7cff; --amber: #e0824a;
-    --mark-body: #8b7cff; --mark-headdress: #0d0f14; --mark-headdress-opacity: 0.35;
-    --mark-eyes: #0d0f14; --mark-play: #0d0f14;
+    --bg: #0c0a08; --bg-2: #110e0b; --line: #241e17; --line-2: #3a3126;
+    --text: #f4efe4; --muted: #a99a84; --faint: #7a6d5c;
+    --numeral: #171310;
+    --stone: #453a2c; --stone-2: #574a38; --cut: #191510;
+    --dune-0: #14100b90; --dune-1: #191410; --dune-2: #1f1913; --dune-3: #271f17;
+    --mote: #c2ae8e; --mote-op: 0.5;
+    --lua: #ded1b6; --lua-cratera: #c3b28e; --lua-halo: #d29a44;
+    --estrela: #efe7d6;
+    --accent: #d29a44; --warn: #dca84a; --danger: #e08163;
+    --mark-body: #d29a44; --mark-headdress: #1a1206; --mark-headdress-opacity: 0.38;
+    --mark-eyes: #1a1206; --mark-play: #1a1206;
   }
   :root.light {
-    --bg: #efe0c8; --bg-2: #f7ecd9; --line: #ddcaa8; --line-2: #c2a879;
-    --text: #2b2118; --muted: #6b5540; --faint: #8a6a44;
-    --numeral: #e2cfab;
-    --stone: #2b2118; --stone-2: #c98f3c; --cut: #efe0c8;
-    --dune-0: #e0c9a4; --dune-1: #d8bd95; --dune-2: #cfb086; --dune-3: #c6a377;
-    --mote: #ffffff; --mote-op: 0.55;
-    --violet: #a8642c; --amber: #9c3f1d;
-    --mark-body: #2b2118; --mark-headdress: #c98f3c; --mark-headdress-opacity: 1;
-    --mark-eyes: #efe0c8; --mark-play: #a8642c;
+    --bg: #f6f3ee; --bg-2: #fdfbf7; --line: #ddd4c6; --line-2: #d0c4b1;
+    --text: #241e17; --muted: #6b6154; --faint: #7d7466;
+    --numeral: #e9e2d6;
+    --stone: #241e17; --stone-2: #c98f3c; --cut: #f6f3ee;
+    --dune-0: #e9e2d6; --dune-1: #e3dbcd; --dune-2: #dcd2c1; --dune-3: #d4c9b5;
+    --mote: #ffffff; --mote-op: 0.75;
+    --accent: #9d5a26; --warn: #8a5a12; --danger: #9c3f1d;
+    --mark-body: #241e17; --mark-headdress: #c98f3c; --mark-headdress-opacity: 1;
+    --mark-eyes: #f6f3ee; --mark-play: #9d5a26;
   }
   @media (prefers-color-scheme: light) {
     :root:not(.dark) {
-      --bg: #efe0c8; --bg-2: #f7ecd9; --line: #ddcaa8; --line-2: #c2a879;
-      --text: #2b2118; --muted: #6b5540; --faint: #8a6a44;
-      --numeral: #e2cfab;
-      --stone: #2b2118; --stone-2: #c98f3c; --cut: #efe0c8;
-      --dune-0: #e0c9a4; --dune-1: #d8bd95; --dune-2: #cfb086; --dune-3: #c6a377;
-      --mote: #ffffff; --mote-op: 0.55;
-      --violet: #a8642c; --amber: #9c3f1d;
-      --mark-body: #2b2118; --mark-headdress: #c98f3c; --mark-headdress-opacity: 1;
-      --mark-eyes: #efe0c8; --mark-play: #a8642c;
+      --bg: #f6f3ee; --bg-2: #fdfbf7; --line: #ddd4c6; --line-2: #d0c4b1;
+    --text: #241e17; --muted: #6b6154; --faint: #7d7466;
+    --numeral: #e9e2d6;
+    --stone: #241e17; --stone-2: #c98f3c; --cut: #f6f3ee;
+    --dune-0: #e9e2d6; --dune-1: #e3dbcd; --dune-2: #dcd2c1; --dune-3: #d4c9b5;
+    --mote: #ffffff; --mote-op: 0.75;
+    --accent: #9d5a26; --warn: #8a5a12; --danger: #9c3f1d;
+    --mark-body: #241e17; --mark-headdress: #c98f3c; --mark-headdress-opacity: 1;
+    --mark-eyes: #f6f3ee; --mark-play: #9d5a26;
     }
   }
   * { box-sizing: border-box; }
@@ -78,7 +80,7 @@
     font-family: 'Archivo', system-ui, -apple-system, Helvetica, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  a { color: var(--violet); text-decoration: none; }
+  a { color: var(--accent); text-decoration: none; }
   a:hover { color: var(--text); }
   .topbar {
     position: relative; z-index: 3; display: flex; align-items: center; gap: 10px;
@@ -97,7 +99,7 @@
   .numeral { display: flex; align-items: center; justify-content: center; pointer-events: none; will-change: transform; }
   .numeral span { font-size: min(38vw, 400px); font-weight: 700; letter-spacing: -0.04em; line-height: 1; color: var(--numeral); user-select: none; animation: breathe 14s ease-in-out infinite; }
   .copy { position: relative; z-index: 2; width: 470px; max-width: 100%; display: flex; flex-direction: column; gap: 20px; }
-  .eyebrow { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--violet); }
+  .eyebrow { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--warn); }
   h1 { margin: 0; font-size: clamp(30px, 4.4vw, 46px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; text-wrap: pretty; }
   .quote { margin: 0; padding-left: 16px; border-left: 2px solid var(--line-2); font-style: italic; font-size: 15px; line-height: 1.75; color: var(--muted); text-wrap: pretty; }
   .quote cite { display: block; font-style: normal; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.12em; color: var(--faint); }
@@ -163,6 +165,114 @@
     .numeral span { font-size: 46vw; }
     .back { left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); }
   }
+  /* ---------- o céu ----------
+     Estrelas fixas que cintilam e uma cadente que cruza de tempos em tempos.
+     Fica atrás da lua e das dunas — ordem do DOM é ordem de pintura —, então
+     o halo lava as estrelas próximas e a areia cobre as de baixo sem que
+     ninguém precise recortar o campo à mão. */
+  .ceu { position: absolute; inset: 0 0 auto 0; width: 100%; height: 100%; pointer-events: none; }
+  .estrela { animation-name: cintila; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+  @keyframes cintila { 0%, 100% { opacity: .26; } 50% { opacity: .95; } }
+
+  /* A caixa da cadente é posicionada em porcentagem, não em coordenada do
+     viewBox do campo: o campo usa `slice`, que recorta as laterais quando o
+     contêiner é mais estreito que o viewBox. Ancorado lá dentro, o risco
+     saía de cena na metade do caminho. */
+  .cadente-caixa {
+    position: absolute; z-index: 1; top: 13%; left: 32%;
+    width: clamp(150px, 17vw, 250px); height: auto; pointer-events: none;
+  }
+  /* Rara de propósito: 19s de ciclo para 1,3s de risco. Uma que passa a cada
+     dois segundos vira pisca-pisca, não acontecimento. */
+  .cadente { opacity: 0; animation: cadente 19s linear infinite; }
+  /* O risco todo acontece nos primeiros 7% do ciclo; o resto é o céu vazio
+     esperando a próxima. */
+  @keyframes cadente {
+    0%   { opacity: 0; transform: translate(0, 0); }
+    1.4% { opacity: 1; }
+    5.5% { opacity: 1; }
+    7%   { opacity: 0; transform: translate(102px, 63px); }
+    100% { opacity: 0; transform: translate(102px, 63px); }
+  }
+
+  /* ---------- a lua ----------
+     Só no escuro: é a fonte de luz que a cena noturna não tinha. No claro o
+     sol já está lá, no degradê radial do <main>; acender as duas coisas daria
+     duas luzes brigando com uma estátua que projeta sombra para um lado só. */
+  .lua-caixa {
+    position: absolute; z-index: 1; top: 10%; left: 9%;
+    width: clamp(110px, 13vw, 178px); aspect-ratio: 1; pointer-events: none;
+  }
+  .lua { display: block; width: 100%; height: auto; }
+  /* O alvo do ponteiro: só o disco, não o halo. `inset: 27.5%` recorta a área
+     exata dele — r=27 num viewBox de 120 é 45% da caixa, centrado. */
+  .lua-alvo { position: absolute; inset: 27.5%; border-radius: 50%; }
+  /* Uma camada por dono, porque as três animam transform e a de fora ainda
+     leva o parallax por style inline. Empilhadas no mesmo elemento, a última
+     declarada apagaria as outras. */
+  .lua-corpo { animation: luaNasce 1.6s cubic-bezier(.16,.84,.24,1) .2s backwards; }
+  .lua-deriva { animation: luaDeriva 90s ease-in-out infinite; }
+  .lua-halo { animation: luaBrilho 14s ease-in-out infinite; }
+  /* No celular a cópia ocupa o topo inteiro: não sobra céu lá em cima. A lua
+     e a cadente descem para a faixa vazia acima das dunas — que é onde uma
+     lua do deserto estaria mesmo —, e o campo de estrelas é mascarado onde o
+     texto começa.
+
+     A máscara é melhor que reposicionar o campo: mantém a densidade e a
+     escala das estrelas, só não as desenha por cima do título. Reposicionar
+     mudaria o recorte do `slice` e deixaria um terço delas visível.
+
+     Esta consulta mora AQUI, e não junto das outras regras de celular lá em
+     cima, porque a especificidade é a mesma e quem vem depois vence: lá, as
+     regras de desktop logo acima desfaziam estas. */
+  @media (max-width: 860px) {
+    .lua-caixa { top: auto; bottom: 29%; left: 7%; width: clamp(76px, 20vw, 122px); }
+    .cadente-caixa { top: auto; bottom: 44%; left: 26%; width: clamp(120px, 34vw, 185px); }
+    /* O campo deixa de ser tela cheia e vira uma faixa com a proporção do
+       próprio viewBox (2:1). Em retrato, `slice` num contêiner de tela cheia
+       amplia tanto que sobra um quinto da largura do campo — seis estrelas de
+       vinte e seis. Numa faixa larga o recorte quase some, e ela cai
+       exatamente no céu que existe: abaixo da cópia, acima das dunas. */
+    .ceu { top: 46%; height: 24%; inset-inline: 0; }
+  }
+  @keyframes luaNasce { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  @keyframes luaDeriva { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+  @keyframes luaBrilho { 0%, 100% { opacity: .82; } 50% { opacity: 1; } }
+  /* Encostar nela apaga a lua.
+
+     O alvo é um <span> HTML, não o SVG, por duas razões concretas.
+
+     A primeira é o recorte: a caixa do <svg> inclui o halo inteiro, e usá-la
+     apagaria a lua com o ponteiro a meio palmo de distância. `inset: 27.5%`
+     com borda redonda dá exatamente o disco — r=27 num viewBox de 120, ou
+     45% da caixa. Encostar no brilho não é encostar na lua.
+
+     A segunda é que o alvo não pode ser a coisa que se apaga: em opacidade 0
+     o disco deixaria de ser atingível, o hover se perderia, a lua voltaria, e
+     ela piscaria com o ponteiro parado em cima. O <span> nunca muda de
+     opacidade, então o alvo é estável.
+
+     Ele fica ANTES do <svg> no DOM para o combinador irmão alcançá-lo.
+
+     Apagar é mais rápido que reacender — 0,45s contra 1,1s. */
+  @media (hover: hover) {
+    .lua-alvo { pointer-events: auto; }
+    .lua { transition: opacity 1.1s ease-in; }
+    .lua-alvo:hover ~ .lua { opacity: 0; transition: opacity .45s ease-out; }
+  }
+
+  /* No claro ela some. display:none e não opacity, para o halo não continuar
+     clareando o papel. As duas condições são as mesmas que trocam a paleta:
+     a classe salva no NAS e, sem ela, a preferência do aparelho. */
+  :root.light .ceu, :root.light .cadente-caixa { display: none; }
+  @media (prefers-color-scheme: light) {
+    :root:not(.dark) .ceu, :root:not(.dark) .cadente-caixa { display: none; }
+  }
+  :root.light .lua-caixa { display: none; }
+  @media (prefers-color-scheme: light) {
+    :root:not(.dark) .lua-caixa { display: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .crack { stroke-dashoffset: 0; }
@@ -185,6 +295,82 @@
   </header>
   <main>
     <div class="numeral"><span>404</span></div>
+    <svg class="ceu" viewBox="0 0 800 400" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+        <circle class="estrela" cx="38" cy="52" r="1.1" fill="var(--estrela)" style="animation-duration:6.5s; animation-delay:-0.4s;"/>
+        <circle class="estrela" cx="96" cy="118" r="0.8" fill="var(--estrela)" style="animation-duration:8.0s; animation-delay:-3.1s;"/>
+        <circle class="estrela" cx="134" cy="30" r="1.4" fill="var(--estrela)" style="animation-duration:5.5s; animation-delay:-1.9s;"/>
+        <circle class="estrela" cx="168" cy="176" r="0.9" fill="var(--estrela)" style="animation-duration:9.0s; animation-delay:-5.6s;"/>
+        <circle class="estrela" cx="212" cy="76" r="1.2" fill="var(--estrela)" style="animation-duration:7.0s; animation-delay:-2.3s;"/>
+        <circle class="estrela" cx="247" cy="142" r="0.7" fill="var(--estrela)" style="animation-duration:6.0s; animation-delay:-4.8s;"/>
+        <circle class="estrela" cx="286" cy="24" r="1.0" fill="var(--estrela)" style="animation-duration:8.5s; animation-delay:-0.9s;"/>
+        <circle class="estrela" cx="318" cy="196" r="1.3" fill="var(--estrela)" style="animation-duration:5.0s; animation-delay:-6.2s;"/>
+        <circle class="estrela" cx="352" cy="96" r="0.8" fill="var(--estrela)" style="animation-duration:7.5s; animation-delay:-3.7s;"/>
+        <circle class="estrela" cx="391" cy="46" r="1.5" fill="var(--estrela)" style="animation-duration:6.2s; animation-delay:-1.2s;"/>
+        <circle class="estrela" cx="424" cy="158" r="1.0" fill="var(--estrela)" style="animation-duration:9.5s; animation-delay:-5.1s;"/>
+        <circle class="estrela" cx="462" cy="108" r="0.7" fill="var(--estrela)" style="animation-duration:5.8s; animation-delay:-2.6s;"/>
+        <circle class="estrela" cx="498" cy="62" r="1.2" fill="var(--estrela)" style="animation-duration:8.2s; animation-delay:-4.3s;"/>
+        <circle class="estrela" cx="531" cy="208" r="0.9" fill="var(--estrela)" style="animation-duration:6.8s; animation-delay:-0.6s;"/>
+        <circle class="estrela" cx="569" cy="34" r="1.1" fill="var(--estrela)" style="animation-duration:7.8s; animation-delay:-6.9s;"/>
+        <circle class="estrela" cx="604" cy="128" r="1.4" fill="var(--estrela)" style="animation-duration:5.3s; animation-delay:-2.0s;"/>
+        <circle class="estrela" cx="641" cy="88" r="0.8" fill="var(--estrela)" style="animation-duration:9.2s; animation-delay:-4.6s;"/>
+        <circle class="estrela" cx="676" cy="182" r="1.0" fill="var(--estrela)" style="animation-duration:6.6s; animation-delay:-1.5s;"/>
+        <circle class="estrela" cx="712" cy="56" r="1.3" fill="var(--estrela)" style="animation-duration:8.8s; animation-delay:-3.4s;"/>
+        <circle class="estrela" cx="748" cy="146" r="0.9" fill="var(--estrela)" style="animation-duration:5.6s; animation-delay:-5.9s;"/>
+        <circle class="estrela" cx="778" cy="98" r="1.1" fill="var(--estrela)" style="animation-duration:7.2s; animation-delay:-2.8s;"/>
+        <circle class="estrela" cx="62" cy="172" r="1.0" fill="var(--estrela)" style="animation-duration:8.6s; animation-delay:-6.4s;"/>
+        <circle class="estrela" cx="270" cy="116" r="0.9" fill="var(--estrela)" style="animation-duration:6.4s; animation-delay:-1.7s;"/>
+        <circle class="estrela" cx="452" cy="226" r="0.8" fill="var(--estrela)" style="animation-duration:7.6s; animation-delay:-4.1s;"/>
+        <circle class="estrela" cx="588" cy="152" r="0.7" fill="var(--estrela)" style="animation-duration:9.8s; animation-delay:-0.2s;"/>
+        <circle class="estrela" cx="156" cy="100" r="1.2" fill="var(--estrela)" style="animation-duration:6.9s; animation-delay:-5.3s;"/>
+    </svg>
+    <svg class="cadente-caixa" viewBox="0 0 160 100" aria-hidden="true">
+      <defs>
+        <!-- O rastro acende na direção do movimento: transparente na cauda,
+             cheio na cabeça. -->
+        <linearGradient id="rastro" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="var(--estrela)" stop-opacity="0"/>
+          <stop offset="100%" stop-color="var(--estrela)" stop-opacity="0.9"/>
+        </linearGradient>
+      </defs>
+      <g class="cadente">
+        <line x1="2" y1="2" x2="52" y2="33" stroke="url(#rastro)" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="52" cy="33" r="1.7" fill="var(--estrela)"/>
+      </g>
+    </svg>
+    <div class="lua-caixa">
+      <span class="lua-alvo" aria-hidden="true"></span>
+      <svg class="lua" viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <radialGradient id="lua-halo">
+          <stop offset="34%" stop-color="var(--lua-halo)" stop-opacity="0.4"/>
+          <stop offset="62%" stop-color="var(--lua-halo)" stop-opacity="0.11"/>
+          <stop offset="100%" stop-color="var(--lua-halo)" stop-opacity="0"/>
+        </radialGradient>
+        <!-- Fase em três passos, e a ordem importa: disco inteiro, meio da
+             direita apagado, elipse acesa de volta. É a elipse que arqueia o
+             terminador para o lado escuro; um círculo mordendo a borda
+             arqueia para o lado errado e vira foice. rx=12 sobre ry=27 dá
+             72% de face iluminada. -->
+        <mask id="lua-gibosa">
+          <rect width="120" height="120" fill="#000"/>
+          <circle cx="60" cy="60" r="27" fill="#fff"/>
+          <rect x="60" y="0" width="60" height="120" fill="#000"/>
+          <ellipse cx="60" cy="60" rx="12" ry="27" fill="#fff"/>
+        </mask>
+      </defs>
+      <g class="lua-corpo"><g class="lua-deriva">
+        <circle class="lua-halo" cx="60" cy="60" r="58" fill="url(#lua-halo)"/>
+        <g mask="url(#lua-gibosa)">
+          <circle cx="60" cy="60" r="27" fill="var(--lua)"/>
+          <!-- As crateras repetem as órbitas vazadas da máscara. -->
+          <circle cx="49" cy="51" r="5.5" fill="var(--lua-cratera)"/>
+          <circle cx="43" cy="67" r="3.4" fill="var(--lua-cratera)"/>
+          <circle cx="54" cy="72" r="2.2" fill="var(--lua-cratera)"/>
+          <circle cx="40" cy="55" r="2" fill="var(--lua-cratera)"/>
+        </g>
+      </g></g>
+      </svg>
+    </div>
     <svg class="dunes" viewBox="0 0 820 420" preserveAspectRatio="xMinYMax slice" aria-hidden="true">
       <g class="haze">
         <path d="M0 250 C120 220 200 268 320 258 C450 248 520 210 640 226 C720 236 780 258 820 250 L820 420 L0 420 Z" fill="var(--dune-0)"/>
@@ -231,12 +417,14 @@
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       var num = document.querySelector('.numeral');
       var mask = document.querySelector('.mask');
+      var lua = document.querySelector('.lua-caixa');
       var main = document.querySelector('main');
       var tx = 0, ty = 0, cx = 0, cy = 0, raf = null;
       function loop() {
         cx += (tx - cx) * 0.06; cy += (ty - cy) * 0.06;
         num.style.transform = 'translate(' + (cx * 18) + 'px,' + (cy * 12) + 'px)';
         if (mask) mask.style.transform = 'translate(' + (cx * -9) + 'px,' + (cy * -5) + 'px)';
+        if (lua) lua.style.transform = 'translate(' + (cx * -4) + 'px,' + (cy * -3) + 'px)';
         raf = (Math.abs(tx - cx) > 0.001 || Math.abs(ty - cy) > 0.001) ? requestAnimationFrame(loop) : null;
       }
       main.addEventListener('pointermove', function (e) {

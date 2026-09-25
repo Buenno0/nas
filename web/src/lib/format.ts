@@ -34,12 +34,21 @@ export function humanSize(bytes: number): string {
   return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`
 }
 
-/** Cor estável a partir do nome, para os pôsteres sem capa não ficarem iguais. */
+/** Cor estável a partir do nome, para os pôsteres sem capa não ficarem iguais.
+ *
+ *  O matiz não passeia pelos 360°: fica num arco quente de 95°, de terracota
+ *  (~25°) a bronze esverdeado (~120°), passando pelo ocre. Girar o círculo
+ *  inteiro jogava rosa e ciano no meio de uma grade de pedra e areia — era a
+ *  cor mais fora do sistema em toda a interface. A croma também caiu: esses
+ *  blocos são o fundo de um título sem capa, não o assunto da tela. */
+const ARCO_INICIO = 25
+const ARCO_TAMANHO = 95
+
 export function gradientFor(name: string): string {
   let hash = 0
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
-  const hue = hash % 360
-  return `linear-gradient(145deg, oklch(0.45 0.13 ${hue}), oklch(0.28 0.09 ${(hue + 48) % 360}))`
+  const hue = ARCO_INICIO + (hash % ARCO_TAMANHO)
+  return `linear-gradient(145deg, oklch(0.42 0.085 ${hue}), oklch(0.25 0.055 ${hue + 22}))`
 }
 
 export function initials(name: string): string {

@@ -33,6 +33,13 @@ var extTypes = map[string]db.MediaType{
 	".heif": db.TypePhoto, ".avif": db.TypePhoto, ".bmp": db.TypePhoto,
 }
 
+// Legendas em arquivo ao lado do vídeo (filme.mkv + filme.pt.srt). Não são
+// mídia: nunca viram título nem entrada no acervo, só se anexam ao vídeo
+// correspondente. É o arranjo mais comum em acervo brasileiro.
+var legendaExts = map[string]bool{
+	".srt": true, ".vtt": true, ".ass": true, ".ssa": true, ".sub": true,
+}
+
 // Pastas que nunca contêm mídia do usuário.
 var skipDirs = map[string]bool{
 	"@eaDir": true, "node_modules": true, "#recycle": true,
@@ -115,6 +122,9 @@ type foundFile struct {
 	probe   ProbeResult
 	probed  bool
 	changed bool
+	// takenAt é a data de captura da foto, em unix. Zero quando o arquivo não
+	// traz EXIF — e aí o mtime serve de reserva na hora de exibir.
+	takenAt int64
 }
 
 // ScanLibrary indexa uma biblioteca: descobre arquivos, detecta o que mudou,
@@ -122,7 +132,7 @@ type foundFile struct {
 func (s *Scanner) ScanLibrary(ctx context.Context, lib db.Library, onProgress ProgressFunc) (Stats, error) {
 	var stats Stats
 
-	files, err := walk(lib.Path)
+	files, legendas, err := walk(lib.Path)
 	if err != nil {
 		return stats, err
 	}
@@ -153,6 +163,11 @@ func (s *Scanner) ScanLibrary(ctx context.Context, lib db.Library, onProgress Pr
 		if f.changed && needsProbe(f) {
 			toProbe = append(toProbe, f)
 		}
+		// Foto não vai para o ffprobe, mas tem data de captura para ler. É
+		// leitura de alguns KB do começo do arquivo, não um processo novo.
+		if f.changed && f.mtype == db.TypePhoto {
+			f.takenAt = DataDeCaptura(f.path)
+		}
 	}
 
 	s.probeAll(ctx, lib.Name, toProbe, onProgress)
@@ -170,8 +185,18 @@ func (s *Scanner) ScanLibrary(ctx context.Context, lib db.Library, onProgress Pr
 				return stats, err
 			}
 			fileID = id
+			if f.probed {
+				if err := s.gravaFaixas(ctx, fileID, f, legendas); err != nil {
+					// Faixa é enfeite: sem ela o arquivo ainda toca no áudio
+					// padrão. Não vale abortar o scan da biblioteca inteira.
+					log.Printf("faixas de %s: %v", f.rel, err)
+				}
+			}
 		} else {
 			fileID = st.ID
+			// Mesmo sem o vídeo ter mudado, uma legenda pode ter sido largada
+			// ao lado dele depois do último scan.
+			s.reconciliaLegendas(ctx, fileID, f, legendas)
 			if st.HasTitle {
 				continue // nada mudou e já está agrupado
 			}
@@ -206,6 +231,45 @@ func (s *Scanner) ScanLibrary(ctx context.Context, lib db.Library, onProgress Pr
 		return stats, err
 	}
 	return stats, nil
+}
+
+// gravaFaixas junta o que veio de dentro do arquivo com as legendas ao lado.
+func (s *Scanner) gravaFaixas(ctx context.Context, fileID int64, f *foundFile, legendas []legendaSolta) error {
+	if f.mtype != db.TypeVideo {
+		return nil
+	}
+	faixas := make([]db.Stream, 0, len(f.probe.Streams))
+	for _, st := range f.probe.Streams {
+		faixas = append(faixas, db.Stream{
+			Index:    st.Index,
+			Kind:     db.StreamKind(st.Kind),
+			Codec:    st.Codec,
+			Lang:     st.Lang,
+			Title:    st.Title,
+			Channels: st.Channels,
+			Default:  st.Default,
+			Forced:   st.Forced,
+		})
+	}
+	faixas = append(faixas, legendasDe(f.path, legendas)...)
+	return s.db.ReplaceStreams(ctx, fileID, faixas)
+}
+
+// reconciliaLegendas cuida do arquivo que não mudou. Só escreve quando a
+// quantidade de legendas ao lado difere do registrado — o caminho normal do
+// scan é uma contagem por vídeo, não uma reescrita.
+func (s *Scanner) reconciliaLegendas(ctx context.Context, fileID int64, f *foundFile, legendas []legendaSolta) {
+	if f.mtype != db.TypeVideo {
+		return
+	}
+	achadas := legendasDe(f.path, legendas)
+	registradas, err := s.db.ContaLegendasExternas(ctx, fileID)
+	if err != nil || len(achadas) == registradas {
+		return
+	}
+	if err := s.db.ReplaceExternalSubtitles(ctx, fileID, achadas); err != nil {
+		log.Printf("legendas de %s: %v", f.rel, err)
+	}
 }
 
 // needsProbe diz se vale chamar o ffprobe para o arquivo.
@@ -286,7 +350,12 @@ func mediaFileFrom(lib db.Library, f *foundFile) db.MediaFile {
 		Height:    f.probe.Height,
 		VCodec:    f.probe.VCodec,
 		ACodec:    f.probe.ACodec,
+		PixFmt:    f.probe.PixFmt,
+		VProfile:  f.probe.VProfile,
+		Channels:  f.probe.Channels,
+		VBitrate:  f.probe.VBitrate,
 		Track:     f.probe.Track,
+		TakenAt:   f.takenAt,
 		// Só música costuma trazer título nas tags; em vídeo esse campo vem
 		// preenchido com lixo do encoder mais vezes do que ajuda.
 		DisplayName: audioTitle(f),
@@ -405,8 +474,17 @@ func parentFolder(rel string) string {
 }
 
 // walk lista os arquivos de mídia sob root.
-func walk(root string) ([]foundFile, error) {
+// legendaSolta é um arquivo de legenda encontrado ao lado de um vídeo.
+type legendaSolta struct {
+	path string
+	dir  string
+	base string // nome sem a extensão de legenda, minúsculo
+	ext  string
+}
+
+func walk(root string) ([]foundFile, []legendaSolta, error) {
 	var files []foundFile
+	var legendas []legendaSolta
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -430,6 +508,15 @@ func walk(root string) ([]foundFile, error) {
 		}
 
 		ext := strings.ToLower(filepath.Ext(name))
+		if legendaExts[ext] {
+			legendas = append(legendas, legendaSolta{
+				path: path,
+				dir:  filepath.Dir(path),
+				base: strings.ToLower(strings.TrimSuffix(name, filepath.Ext(name))),
+				ext:  ext,
+			})
+			return nil
+		}
 		mtype, ok := extTypes[ext]
 		if !ok {
 			return nil
@@ -455,7 +542,56 @@ func walk(root string) ([]foundFile, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("percorrendo %s: %w", root, err)
+		return nil, nil, fmt.Errorf("percorrendo %s: %w", root, err)
 	}
-	return files, nil
+	return files, legendas, nil
+}
+
+// legendasDe casa as legendas soltas com um vídeo. A regra é o prefixo: para
+// "O Poderoso Chefao.mkv" valem "O Poderoso Chefao.srt",
+// "O Poderoso Chefao.pt-BR.srt" e "O Poderoso Chefao.eng.forced.srt".
+//
+// O sufixo que sobra vira idioma e marca de "forçada" — é a convenção que todo
+// mundo usa e ninguém documenta.
+func legendasDe(video string, todas []legendaSolta) []db.Stream {
+	dir := filepath.Dir(video)
+	base := strings.ToLower(strings.TrimSuffix(filepath.Base(video), filepath.Ext(video)))
+
+	var achadas []db.Stream
+	idx := -1
+	for _, l := range todas {
+		if l.dir != dir || !strings.HasPrefix(l.base, base) {
+			continue
+		}
+		lang, forced := idiomaDoSufixo(strings.TrimPrefix(l.base, base))
+		achadas = append(achadas, db.Stream{
+			Index:   idx,
+			Kind:    db.StreamSubtitle,
+			Codec:   strings.TrimPrefix(l.ext, "."),
+			Lang:    lang,
+			Forced:  forced,
+			ExtPath: l.path,
+		})
+		idx--
+	}
+	return achadas
+}
+
+// idiomaDoSufixo lê ".pt-BR.forced" e devolve ("pt-BR", true). Sufixo vazio
+// (filme.srt) não declara idioma nenhum, e é honesto dizer isso em vez de
+// chutar português.
+func idiomaDoSufixo(sufixo string) (lang string, forced bool) {
+	for _, parte := range strings.Split(strings.Trim(sufixo, "."), ".") {
+		if parte == "" {
+			continue
+		}
+		if parte == "forced" || parte == "forcada" || parte == "forçada" {
+			forced = true
+			continue
+		}
+		if lang == "" {
+			lang = parte
+		}
+	}
+	return lang, forced
 }

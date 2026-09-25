@@ -41,11 +41,35 @@ type ProbeResult struct {
 	VCodec   string
 	ACodec   string
 
+	// Detalhes que decidem se o navegador toca o arquivo. "h264" sozinho não
+	// decide: High 10 (yuv420p10le) é h264 e não toca em lugar nenhum.
+	PixFmt   string
+	VProfile string
+	Channels int
+	VBitrate int
+
 	// Tags de áudio, usadas para agrupar músicas em álbuns.
 	Title  string
 	Artist string
 	Album  string
 	Track  int
+
+	// Todas as faixas de áudio e legenda do arquivo, na ordem em que aparecem.
+	// ACodec/Channels acima continuam sendo os da faixa padrão — é o que decide
+	// se o arquivo toca direto, e é o que o acervo antigo já gravava.
+	Streams []Stream
+}
+
+// Stream é uma faixa de áudio ou legenda dentro do arquivo.
+type Stream struct {
+	Index    int    // como o ffmpeg endereça em -map 0:N
+	Kind     string // "audio" | "subtitle"
+	Codec    string
+	Lang     string
+	Title    string
+	Channels int
+	Default  bool
+	Forced   bool
 }
 
 type ffprobeOutput struct {
@@ -54,11 +78,20 @@ type ffprobeOutput struct {
 		Tags     map[string]string `json:"tags"`
 	} `json:"format"`
 	Streams []struct {
-		CodecType string            `json:"codec_type"`
-		CodecName string            `json:"codec_name"`
-		Width     int               `json:"width"`
-		Height    int               `json:"height"`
-		Tags      map[string]string `json:"tags"`
+		Index       int               `json:"index"`
+		CodecType   string            `json:"codec_type"`
+		CodecName   string            `json:"codec_name"`
+		Width       int               `json:"width"`
+		Height      int               `json:"height"`
+		PixFmt      string            `json:"pix_fmt"`
+		Profile     string            `json:"profile"`
+		Channels    int               `json:"channels"`
+		BitRate     string            `json:"bit_rate"`
+		Tags        map[string]string `json:"tags"`
+		Disposition struct {
+			Default int `json:"default"`
+			Forced  int `json:"forced"`
+		} `json:"disposition"`
 	} `json:"streams"`
 }
 
@@ -101,11 +134,37 @@ func Probe(ctx context.Context, path string) (ProbeResult, error) {
 			if res.VCodec == "" {
 				res.VCodec = st.CodecName
 				res.Width, res.Height = st.Width, st.Height
+				res.PixFmt = st.PixFmt
+				res.VProfile = st.Profile
+				if n, err := strconv.Atoi(st.BitRate); err == nil {
+					res.VBitrate = n
+				}
 			}
 		case "audio":
 			if res.ACodec == "" {
 				res.ACodec = st.CodecName
+				res.Channels = st.Channels
 			}
+			res.Streams = append(res.Streams, Stream{
+				Index:    st.Index,
+				Kind:     "audio",
+				Codec:    st.CodecName,
+				Lang:     firstTag(st.Tags, "language", "LANGUAGE"),
+				Title:    firstTag(st.Tags, "title", "TITLE"),
+				Channels: st.Channels,
+				Default:  st.Disposition.Default == 1,
+				Forced:   st.Disposition.Forced == 1,
+			})
+		case "subtitle":
+			res.Streams = append(res.Streams, Stream{
+				Index:   st.Index,
+				Kind:    "subtitle",
+				Codec:   st.CodecName,
+				Lang:    firstTag(st.Tags, "language", "LANGUAGE"),
+				Title:   firstTag(st.Tags, "title", "TITLE"),
+				Default: st.Disposition.Default == 1,
+				Forced:  st.Disposition.Forced == 1,
+			})
 		}
 	}
 

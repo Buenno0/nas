@@ -15,12 +15,23 @@ type loginRequest struct {
 	// Remember vem do "manter conectado": sessão de 30 dias com cookie
 	// datado, contra 12 horas com cookie que morre ao fechar o navegador.
 	Remember bool `json:"remember"`
+	// TokenNaResposta faz o token da sessão voltar também no corpo, para o
+	// cliente que não tem cookie jar e guarda a credencial ele mesmo — o app
+	// nativo, no Keychain.
+	//
+	// É um pedido explícito e o SPA nunca o faz: deixar o token fora do
+	// alcance do JavaScript é exatamente o que o HttpOnly compra, e ninguém
+	// devolve isso de graça.
+	TokenNaResposta bool `json:"token_na_resposta"`
 }
 
 type userResponse struct {
 	Username           string `json:"username"`
 	MustChangePassword bool   `json:"must_change_password"`
 	IsAdmin            bool   `json:"is_admin"`
+	// Preenchidos só quando o cliente pediu o token no corpo.
+	Token    string `json:"token,omitempty"`
+	ExpiraEm string `json:"expira_em,omitempty"`
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -55,12 +66,20 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		cookie.Expires = time.Now().Add(ttl)
 	}
 	http.SetCookie(w, cookie)
-	writeJSON(w, http.StatusOK, userResponse{Username: user.Username, MustChangePassword: user.MustChangePassword, IsAdmin: user.IsAdmin})
+
+	resp := userResponse{Username: user.Username, MustChangePassword: user.MustChangePassword, IsAdmin: user.IsAdmin}
+	if req.TokenNaResposta {
+		resp.Token = token
+		resp.ExpiraEm = time.Now().Add(ttl).UTC().Format(time.RFC3339)
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie(auth.CookieName); err == nil {
-		if err := s.auth.Logout(r.Context(), cookie.Value); err != nil {
+	// Cookie ou Bearer: sair da conta precisa funcionar pelo mesmo caminho por
+	// onde a conta entrou.
+	if token := auth.TokenDaRequisicao(r); token != "" {
+		if err := s.auth.Logout(r.Context(), token); err != nil {
 			writeError(w, http.StatusInternalServerError, "não foi possível encerrar a sessão")
 			return
 		}
@@ -111,4 +130,38 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 	})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// tokenDeMidiaResposta é a credencial curta que um player carrega na URL.
+type tokenDeMidiaResposta struct {
+	Token    string `json:"token"`
+	ExpiraEm string `json:"expira_em"`
+	// Segundos até vencer, para o cliente agendar a renovação sem depender de
+	// o relógio dele bater com o do servidor.
+	ValidoPor int `json:"valido_por"`
+	// Param diz onde enfiar o token. Está aqui para o app não ter o nome do
+	// parâmetro escrito à mão em quatro lugares.
+	Param string `json:"param"`
+}
+
+// handleMediaToken entrega uma credencial de URL para as rotas de mídia.
+//
+// Existe porque o AVPlayer do iOS abre o vídeo num processo próprio, sem o
+// cookie jar nem os cabeçalhos do app. Vale horas, morre com a sessão que a
+// pediu e não abre nada da API — os detalhes estão em auth/midia.go.
+func (s *Server) handleMediaToken(w http.ResponseWriter, r *http.Request) {
+	sessao := auth.SessaoFrom(r.Context())
+	if sessao == "" {
+		// Só acontece se a requisição entrou por token de mídia, que não pode
+		// gerar outro. O 401 é honesto: falta a credencial certa.
+		writeError(w, http.StatusUnauthorized, "é preciso uma sessão para gerar um token de mídia")
+		return
+	}
+	token, expira := s.auth.TokenDeMidia(sessao, auth.TokenDeMidiaTTL)
+	writeJSON(w, http.StatusOK, tokenDeMidiaResposta{
+		Token:     token,
+		ExpiraEm:  expira.UTC().Format(time.RFC3339),
+		ValidoPor: int(auth.TokenDeMidiaTTL.Seconds()),
+		Param:     "t",
+	})
 }

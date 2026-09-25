@@ -6,6 +6,7 @@ import { clockTime, gradientFor, humanDuration, humanSize, kindLabel } from '../
 import { DownloadIcon, HeartIcon, PauseIcon, PlayIcon } from '../components/icons'
 import { ErrorState, Spinner } from '../components/states'
 import { PhotoGrid } from '../components/PhotoGrid'
+import { ColecaoPicker } from '../components/ColecaoPicker'
 import { usePlayer, type Track } from '../lib/player'
 
 export function Title() {
@@ -74,7 +75,7 @@ export function Title() {
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">
+            <p className="rotulo">
               {kindLabel[data.kind] ?? data.kind} · {data.library}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-4xl">{data.name}</h1>
@@ -131,6 +132,8 @@ export function Title() {
                 <HeartIcon filled={data.favorite} />
                 {data.favorite ? 'Nos favoritos' : 'Favoritar'}
               </button>
+
+              <ColecaoPicker titleId={titleId} />
 
               {(data.kind === 'movie' || data.kind === 'tv') && (
                 <button
@@ -417,7 +420,7 @@ function FileList({ files }: { files: FileInfo[] }) {
                     .filter(Boolean)
                     .join(' · ')}
                   {file.media_type === 'video' && !playsInBrowser(file) && (
-                    <span className="ml-1.5 text-amber-400">· não toca no navegador</span>
+                    <span className="ml-1.5 text-warn">· não toca no navegador</span>
                   )}
                 </p>
               </div>

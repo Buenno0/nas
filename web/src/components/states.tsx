@@ -32,7 +32,7 @@ export function ErrorState({ error, retry }: { error: unknown; retry?: () => voi
   const message = error instanceof Error ? error.message : 'algo deu errado'
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-20 text-center">
-      <WarningIcon className="text-red-400" width="1.75em" height="1.75em" />
+      <WarningIcon className="text-danger" width="1.75em" height="1.75em" />
       <p className="text-sm text-muted">{message}</p>
       {retry && (
         <button

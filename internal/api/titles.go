@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,7 +45,11 @@ type homeRow struct {
 type homeResponse struct {
 	Hero     *db.TitleCard     `json:"hero,omitempty"`
 	Continue []db.ContinueItem `json:"continue"`
-	Rows     []homeRow         `json:"rows"`
+	// Esquecidos é o que foi começado há mais de 30 dias e nunca terminou.
+	Esquecidos []db.ContinueItem `json:"esquecidos,omitempty"`
+	// Fotos deste mesmo dia, em anos anteriores.
+	NoDia []db.FotoDoDia `json:"no_dia,omitempty"`
+	Rows  []homeRow      `json:"rows"`
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +87,32 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(favorites) > 0 {
 		resp.Rows = append(resp.Rows, homeRow{Key: "favorites", Title: "Meus favoritos", Items: withImageURLs(favorites)})
+	}
+
+	// As prateleiras abaixo falham em silêncio: uma consulta com problema não
+	// pode derrubar a home inteira, que é a primeira tela do aplicativo.
+	if esquecidos, err := s.db.Esquecidos(ctx, user.ID, 12); err == nil && len(esquecidos) > 0 {
+		for i := range esquecidos {
+			esquecidos[i].Poster = posterURL(esquecidos[i].Poster)
+			esquecidos[i].Backdrop = posterURL(esquecidos[i].Backdrop)
+		}
+		resp.Esquecidos = esquecidos
+	} else if err != nil {
+		log.Printf("prateleira de esquecidos: %v", err)
+	}
+
+	if fotos, err := s.db.FotosDoDia(ctx, 20); err == nil {
+		resp.NoDia = fotos
+	} else {
+		log.Printf("prateleira do dia: %v", err)
+	}
+
+	if acaso, err := s.db.TitulosAoAcaso(ctx, user.ID, 20); err == nil && len(acaso) > 0 {
+		resp.Rows = append(resp.Rows, homeRow{
+			Key: "acaso", Title: "Você nunca abriu", Items: withImageURLs(acaso),
+		})
+	} else if err != nil {
+		log.Printf("prateleira ao acaso: %v", err)
 	}
 
 	libs, err := s.db.Libraries(ctx)

@@ -18,7 +18,7 @@ export function Poster({ title, progress, subtitle }: PosterProps) {
       className="group block w-full focus-visible:outline-none"
       aria-label={title.name}
     >
-      <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-elev ring-1 ring-line transition duration-200 group-hover:ring-accent group-focus-visible:ring-2 group-focus-visible:ring-accent">
+      <div className="sala-escura relative aspect-[2/3] overflow-hidden rounded-xl bg-elev ring-1 ring-line transition duration-200 group-hover:ring-accent group-focus-visible:ring-2 group-focus-visible:ring-accent">
         {title.poster ? (
           <img
             src={title.poster}

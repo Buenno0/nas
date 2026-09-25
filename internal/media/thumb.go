@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 )
 
 var (
@@ -102,6 +103,34 @@ func ImageThumb(ctx context.Context, srcPath string, mtime int64, destDir string
 	)
 }
 
+// Duas proteções sobre a geração de miniaturas, ambas medidas nesta máquina
+// (M4, 10 núcleos, um vídeo 1080p de 2h47):
+//
+//  1. Uma miniatura sozinha custa 199 ms. Dezesseis pedidos simultâneos da
+//     MESMA miniatura custavam 2,47 s e saturavam 904% de CPU — dezesseis
+//     processos ffmpeg produzindo byte por byte o mesmo JPEG. É o que acontece
+//     quando uma página abre com o cache frio: o navegador pede tudo de uma vez.
+//     Daí o "voo único": a primeira chamada gera, as outras esperam por ela.
+//
+//  2. Mesmo para miniaturas distintas, paralelismo não compra vazão aqui — o
+//     trabalho é leitura de disco e decodificação, não cálculo. Medido com 16
+//     miniaturas diferentes: teto 1 = 3,12 s, teto 4 = 2,22 s, teto 16 = 2,39 s.
+//     Passar de 4 não acelera nada e só rouba núcleos do streaming e do ffmpeg
+//     de transcodificação, que rodam ao mesmo tempo.
+const maxMiniaturasParalelas = 4
+
+type geracao struct {
+	pronto chan struct{}
+	nome   string
+	err    error
+}
+
+var (
+	geracaoMu  sync.Mutex
+	emGeracao  = map[string]*geracao{}
+	vagasThumb = make(chan struct{}, maxMiniaturasParalelas)
+)
+
 // runFFmpeg escreve em um temporário e renomeia, para o cache nunca conter um
 // JPEG truncado. Devolve o nome do arquivo dentro de destDir.
 func runFFmpeg(ctx context.Context, destDir, name string, args ...string) (string, error) {
@@ -113,6 +142,60 @@ func runFFmpeg(ctx context.Context, destDir, name string, args ...string) (strin
 	if _, err := os.Stat(dest); err == nil {
 		return name, nil
 	}
+
+	// Voo único por chave de cache. A chave inclui caminho, mtime e largura,
+	// então dois pedidos com a mesma chave querem exatamente o mesmo arquivo.
+	geracaoMu.Lock()
+	g, jaTem := emGeracao[dest]
+	if !jaTem {
+		g = &geracao{pronto: make(chan struct{})}
+		emGeracao[dest] = g
+		// A geração roda solta, não dentro da requisição que a pediu. Duas
+		// razões: quem pediu primeiro não deve poder matar, ao navegar para
+		// outra página, o trabalho que outros clientes estão esperando; e um
+		// JPEG de 200 ms abandonado no meio é desperdício puro, enquanto
+		// terminá-lo transforma o próximo pedido em acerto de cache. O prazo
+		// existe para um arquivo patológico não prender uma vaga para sempre.
+		go func() {
+			prazo, cancelar := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+			defer cancelar()
+
+			g.nome, g.err = geraMiniatura(prazo, bin, destDir, dest, name, args)
+
+			geracaoMu.Lock()
+			delete(emGeracao, dest)
+			geracaoMu.Unlock()
+			close(g.pronto)
+		}()
+	}
+	geracaoMu.Unlock()
+
+	// Daqui para baixo, quem gerou e quem só esperava são a mesma coisa: cada
+	// um espera com o SEU prazo e desiste sozinho, sem afetar o trabalho.
+	select {
+	case <-g.pronto:
+		return g.nome, g.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+// geraMiniatura é o trabalho em si, já serializado pelo voo único e limitado
+// pelo semáforo.
+func geraMiniatura(ctx context.Context, bin, destDir, dest, name string, args []string) (string, error) {
+	select {
+	case vagasThumb <- struct{}{}:
+		defer func() { <-vagasThumb }()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+
+	// Segunda checagem: a fila pode ter durado o bastante para outra chave
+	// (largura diferente, mesmo arquivo) já ter deixado esta pronta.
+	if _, err := os.Stat(dest); err == nil {
+		return name, nil
+	}
+
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", err
 	}

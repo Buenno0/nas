@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { api, beaconProgress, downloadUrl, streamUrl, type PlaybackInfo } from '../lib/api'
+import {
+  api,
+  beaconProgress,
+  downloadUrl,
+  type PlaybackInfo,
+  type PlaybackPlan,
+  type PreparoProgresso,
+} from '../lib/api'
 import { clockTime } from '../lib/format'
 import {
   ChevronLeft,
@@ -56,6 +63,11 @@ export function Watch() {
   const [chromeVisible, setChromeVisible] = useState(true)
   const [failed, setFailed] = useState(false)
 
+  // undefined = a faixa padrão do arquivo. Escolher outra muda a chave do
+  // preparo no servidor, então tudo que consulta o plano depende disto.
+  const [audioIdx, setAudioIdx] = useState<number | undefined>(undefined)
+  const [legendaIdx, setLegendaIdx] = useState<number | undefined>(undefined)
+
   const { data: file, isLoading, isError, error } = useQuery({
     queryKey: ['file', id],
     queryFn: () => api.file(id),
@@ -65,6 +77,21 @@ export function Watch() {
     queryFn: () => api.nextEpisode(id),
     enabled: Number.isFinite(id),
   })
+
+  // O que tocar: direto, ou o arquivo preparado pelo servidor. A decisão é do
+  // backend, que conhece pix_fmt e perfil — dados que o navegador não vê.
+  const { data: faixas } = useQuery({
+    queryKey: ['faixas', id],
+    queryFn: () => api.faixas(id),
+    enabled: Number.isFinite(id),
+  })
+
+  const { data: plano, refetch: reconsultarPlano } = useQuery({
+    queryKey: ['playback', id, audioIdx],
+    queryFn: () => api.playback(id, audioIdx),
+    enabled: Number.isFinite(id),
+  })
+  const [preparo, setPreparo] = useState<PreparoProgresso | undefined>(undefined)
 
   const save = useCallback(
     (position: number, total: number) => {
@@ -77,6 +104,13 @@ export function Watch() {
     [id],
   )
 
+  // Outro episódio é outro arquivo, com outras faixas: manter o índice
+  // escolhido apontaria para uma faixa que talvez nem exista lá.
+  useEffect(() => {
+    setAudioIdx(undefined)
+    setLegendaIdx(undefined)
+  }, [id])
+
   // Salva ao sair da página: fetch comum é cancelado no unload, beacon não.
   useEffect(() => {
     const flush = () => {
@@ -85,15 +119,100 @@ export function Watch() {
         beaconProgress(id, video.currentTime, video.duration)
       }
     }
-    window.addEventListener('pagehide', flush)
-    document.addEventListener('visibilitychange', () => {
+    const aoEsconder = () => {
       if (document.visibilityState === 'hidden') flush()
-    })
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', aoEsconder)
     return () => {
       flush()
       window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', aoEsconder)
     }
   }, [id])
+
+  // Trocar de episódio reaproveita o componente: sem este reset, a posição
+  // retomada, a duração e o estado de falha vazavam do arquivo anterior.
+  useEffect(() => {
+    resumed.current = false
+    lastSaved.current = 0
+    setFailed(false)
+    setCurrent(0)
+    setDuration(0)
+    setBuffered(0)
+    setPreparo(undefined)
+  }, [id])
+
+  // Preparo sob demanda: se o plano não é direto, pede o trabalho ao servidor e
+  // acompanha por SSE. O trabalho é idempotente — recarregar a página não
+  // reinicia o ffmpeg, entra na mesma fila.
+  useEffect(() => {
+    if (!plano || plano.modo === 'direct') return
+    if (!plano.ffmpeg || !plano.transcodificacao_ativa) return
+    if (plano.preparo?.estado === 'pronto') return
+
+    let cancelado = false
+    let fonte: EventSource | undefined
+
+    void api
+      .prepare(id, audioIdx)
+      .then((inicial) => {
+        if (cancelado) return
+        setPreparo(inicial)
+        fonte = new EventSource(api.prepareEventsUrl(id, audioIdx))
+        fonte.onmessage = (evento) => {
+          try {
+            const atual = JSON.parse(evento.data) as PreparoProgresso
+            setPreparo(atual)
+            if (atual.estado === 'pronto') {
+              fonte?.close()
+              // O plano agora tem a URL do arquivo preparado.
+              void reconsultarPlano()
+            }
+            if (atual.estado === 'erro') fonte?.close()
+          } catch {
+            // mensagem malformada: espera a próxima
+          }
+        }
+        fonte.onerror = () => fonte?.close()
+      })
+      .catch((err: Error) => {
+        if (!cancelado) setPreparo({ estado: 'erro', erro: err.message } as PreparoProgresso)
+      })
+
+    return () => {
+      cancelado = true
+      fonte?.close()
+    }
+  }, [id, plano, audioIdx, reconsultarPlano])
+
+  const legendaSelecionada = faixas?.legendas.find((l) => l.idx === legendaIdx)
+
+  // O atributo `default` só vale no primeiro carregamento; trocar de legenda
+  // depois exige mexer no modo da trilha à mão, senão ela é montada e fica
+  // invisível.
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    for (const trilha of Array.from(video.textTracks)) {
+      trilha.mode = legendaSelecionada ? 'showing' : 'disabled'
+    }
+  }, [legendaSelecionada, plano])
+
+  // A fonte do <video> é atribuída aqui, e não no JSX: Watch re-renderiza a cada
+  // segundo (o onTimeUpdate atualiza estado), e um src no atributo seria
+  // reescrito no meio da reprodução.
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !plano) return
+    const alvo = plano.url || (plano.modo === 'direct' ? plano.url_direta : '')
+    if (!alvo) return
+    if (video.getAttribute('src') === alvo) return
+
+    video.setAttribute('src', alvo)
+    video.load()
+    resumed.current = false
+  }, [plano])
 
   const revealChrome = useCallback(() => {
     setChromeVisible(true)
@@ -235,13 +354,12 @@ export function Watch() {
       onMouseMove={revealChrome}
       onTouchStart={revealChrome}
       className={[
-        'relative flex h-dvh w-full flex-col bg-black',
+        'sala-escura relative flex h-dvh w-full flex-col bg-black',
         chromeVisible ? '' : 'cursor-none',
       ].join(' ')}
     >
       <video
         ref={videoRef}
-        src={streamUrl(id)}
         poster={file.poster}
         autoPlay
         playsInline
@@ -282,9 +400,34 @@ export function Watch() {
         }}
         onError={() => setFailed(true)}
         className={['h-full w-full', isAudio ? 'object-contain opacity-90' : 'object-contain'].join(' ')}
-      />
+      >
+        {/* Só a legenda escolhida é montada: cada <track> baixado dispara uma
+            conversão para WebVTT no servidor, e montar todas gastaria um ffmpeg
+            por legenda que ninguém pediu. A key força o remount na troca. */}
+        {legendaSelecionada?.url && (
+          <track
+            key={legendaSelecionada.idx}
+            kind="subtitles"
+            src={legendaSelecionada.url}
+            srcLang={legendaSelecionada.lang || 'und'}
+            label={legendaSelecionada.rotulo}
+            default
+          />
+        )}
+      </video>
 
-      {failed && <UnsupportedOverlay file={file} />}
+      {/* Preparo em curso: o vídeo ainda não tem fonte, então esta é a tela.
+          Antes daqui existir, o caso HEVC dava tela preta com um comando de
+          ffmpeg para o dono rodar à mão. */}
+      {plano && plano.modo !== 'direct' && plano.url === '' && plano.ffmpeg && plano.transcodificacao_ativa && (
+        <PainelDePreparo plano={plano} preparo={preparo} />
+      )}
+
+      {/* Sem ffmpeg (ou com transcodificação desligada) não há o que preparar:
+          volta o aviso com o comando manual. */}
+      {((plano && plano.modo !== 'direct' && (!plano.ffmpeg || !plano.transcodificacao_ativa)) || failed) && (
+        <UnsupportedOverlay file={file} plano={plano} />
+      )}
 
       {/* Barra superior */}
       <div
@@ -350,7 +493,7 @@ export function Watch() {
             type="button"
             onClick={togglePlay}
             aria-label={playing ? 'Pausar' : 'Reproduzir'}
-            className="grid h-11 w-11 place-items-center rounded-full bg-white text-black transition hover:bg-white/90"
+            className="grid h-11 w-11 place-items-center rounded-full bg-accent text-accent-ink transition hover:opacity-90"
           >
             {playing ? <PauseIcon /> : <PlayIcon />}
           </button>
@@ -398,9 +541,51 @@ export function Watch() {
                 className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-white/30
                            [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3
                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
-                           [&::-webkit-slider-thumb]:bg-white"
+                           [&::-webkit-slider-thumb]:bg-accent"
               />
             </div>
+
+            {/* Áudio só aparece quando há escolha a fazer. Um arquivo de uma
+                faixa só não ganha um menu de uma opção. */}
+            {faixas && faixas.audio.length > 1 && (
+              <select
+                value={audioIdx ?? ''}
+                onChange={(e) => setAudioIdx(e.target.value === '' ? undefined : Number(e.target.value))}
+                aria-label="Faixa de áudio"
+                className="max-w-36 rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white outline-none"
+              >
+                {faixas.audio.map((f) => (
+                  <option key={f.idx} value={f.idx} className="text-black">
+                    {f.rotulo}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {faixas && faixas.legendas.length > 0 && (
+              <select
+                value={legendaIdx ?? ''}
+                onChange={(e) => setLegendaIdx(e.target.value === '' ? undefined : Number(e.target.value))}
+                aria-label="Legenda"
+                className="max-w-36 rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white outline-none"
+              >
+                <option value="" className="text-black">
+                  Sem legenda
+                </option>
+                {faixas.legendas.map((l) => (
+                  <option
+                    key={l.idx}
+                    value={l.idx}
+                    disabled={!!l.indisponivel}
+                    title={l.indisponivel}
+                    className="text-black"
+                  >
+                    {l.rotulo}
+                    {l.indisponivel ? ' (imagem)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <select
               value={speed}
@@ -492,15 +677,25 @@ function diagnose(file: { ext: string; vcodec?: string; acodec?: string }) {
 
 /** O NAS entrega o arquivo como está; quando o navegador recusa, é melhor
  *  dizer o motivo exato do que deixar uma tela preta. */
-function UnsupportedOverlay({ file }: { file: PlaybackInfo }) {
+function UnsupportedOverlay({ file, plano }: { file: PlaybackInfo; plano?: PlaybackPlan }) {
   const { title, detail, fix } = diagnose(file)
+  // O servidor sabe o motivo exato (inclusive pix_fmt e perfil, que o navegador
+  // não enxerga); quando ele opinou, a explicação dele vale mais.
+  const motivo = plano?.motivo && plano.modo !== 'direct' ? plano.motivo : detail
+  const semFerramenta = plano ? !plano.ffmpeg || !plano.transcodificacao_ativa : false
 
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-black/85 px-6 text-center">
       <div className="max-w-md">
-        <WarningIcon className="mx-auto text-amber-400" width="2em" height="2em" />
+        <WarningIcon className="mx-auto text-warn" width="2em" height="2em" />
         <h2 className="mt-3 text-base font-semibold text-white">{title}</h2>
-        <p className="mt-2 text-sm text-white/70">{detail}</p>
+        <p className="mt-2 text-sm text-white/70">{motivo}</p>
+        {semFerramenta && (
+          <p className="mt-2 text-xs text-warn">
+            O servidor converteria este arquivo sozinho, mas a transcodificação está
+            {plano && !plano.ffmpeg ? ' sem ffmpeg' : ' desligada na configuração'}.
+          </p>
+        )}
         {fix && (
           <code className="mt-3 block overflow-x-auto rounded-lg bg-white/10 px-3 py-2 text-left font-mono text-[11px] text-white/80">
             {fix}
@@ -508,10 +703,70 @@ function UnsupportedOverlay({ file }: { file: PlaybackInfo }) {
         )}
         <a
           href={downloadUrl(file.id)}
-          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black"
+          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink transition hover:opacity-90"
         >
           <DownloadIcon /> Baixar arquivo
         </a>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * O que aparece enquanto o servidor prepara o arquivo. Mostra o que está sendo
+ * feito, quanto falta e a velocidade — a diferença entre "travou" e "está
+ * trabalhando" é a única informação que importa aqui.
+ */
+function PainelDePreparo({
+  plano,
+  preparo,
+}: {
+  plano: PlaybackPlan
+  preparo?: PreparoProgresso
+}) {
+  const rotulos: Record<string, string> = {
+    remux: 'Trocando o container, sem recodificar',
+    audio: 'Recodificando o áudio',
+    video: 'Recodificando a imagem',
+  }
+  const titulo = rotulos[plano.modo] ?? 'Preparando'
+  const percentual = preparo?.percentual ?? 0
+  const restante = preparo?.restante_segundos ?? 0
+  const erro = preparo?.estado === 'erro'
+
+  return (
+    <div className="absolute inset-0 z-10 grid place-items-center bg-black/85 px-6 text-center">
+      <div className="w-full max-w-sm">
+        {erro ? (
+          <>
+            <WarningIcon className="mx-auto text-warn" width="2em" height="2em" />
+            <h2 className="mt-3 text-base font-semibold text-white">Não consegui preparar</h2>
+            <p className="mt-2 text-sm text-white/70">{preparo?.erro}</p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-base font-semibold text-white">{titulo}</h2>
+            <p className="mt-1 text-sm text-white/60">{plano.motivo}</p>
+
+            <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full bg-accent transition-[width] duration-500"
+                style={{ width: `${Math.max(2, percentual)}%` }}
+              />
+            </div>
+
+            <p className="mt-3 font-mono text-xs text-white/60 tabular-nums">
+              {preparo?.estado === 'fila'
+                ? 'na fila…'
+                : `${percentual}%${restante > 0 ? ` · faltam ${clockTime(restante)}` : ''}${
+                    preparo?.velocidade ? ` · ${preparo.velocidade.toFixed(0)}× tempo real` : ''
+                  }`}
+            </p>
+            <p className="mt-4 text-xs text-white/40">
+              O arquivo preparado fica em cache: na próxima vez começa na hora.
+            </p>
+          </>
+        )}
       </div>
     </div>
   )

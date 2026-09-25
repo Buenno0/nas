@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/media"
+	"nas/internal/metrics"
 	"nas/internal/web"
 )
 
@@ -33,11 +35,29 @@ type Server struct {
 	cfgMu sync.RWMutex
 	cfg   config.Config
 
-	db     *db.DB
-	auth   *auth.Service
-	opts   Options
-	scan   scanState
-	ruinas ruinas
+	db      *db.DB
+	auth    *auth.Service
+	devices *devicePairings
+	opts    Options
+	scan    scanState
+	ruinas  ruinas
+
+	// preparador cuida da transcodificação sob demanda; fundo é o contexto do
+	// servidor, para um preparo sobreviver à requisição que o pediu mas morrer
+	// junto com o processo.
+	preparador *media.Preparador
+	fundo      context.Context
+
+	// Telemetria: tudo em memória, reseta a cada execução.
+	//
+	// O amostrador de processo guarda estado entre leituras (o delta de
+	// CPU-time), então um único goroutine o consulta; os handlers só leem a
+	// última amostra pronta em processoAtual.
+	coletor     *metrics.Coletor
+	amostrador  *metrics.AmostradorProcesso
+	processoMu  sync.RWMutex
+	processoUlt metrics.ProcessoAmostra
+	startedAt   time.Time
 }
 
 // ffmpegAvailable diz à interface se dá para gerar capas e miniaturas.
@@ -47,11 +67,26 @@ func (s *Server) ffmpegAvailable() bool {
 }
 
 func New(cfg config.Config, database *db.DB, opts Options) *Server {
+	dir, err := config.PrepareDir()
+	if err != nil {
+		log.Printf("cache de preparo indisponível: %v", err)
+	}
 	return &Server{
-		cfg:  cfg,
-		db:   database,
-		auth: auth.NewService(database),
-		opts: opts,
+		cfg:     cfg,
+		db:      database,
+		auth:    auth.NewService(database),
+		devices: newDevicePairings(),
+		opts:    opts,
+		preparador: media.NovoPreparador(
+			dir,
+			int64(cfg.CacheGB*1e9),
+			int64(cfg.ReservaGB*1e9),
+			cfg.Trabalhos,
+		),
+		coletor:    metrics.NovoColetor(),
+		amostrador: metrics.NovoAmostradorProcesso(),
+		// Substituído pelo contexto real em Serve; até lá, nada roda.
+		fundo: context.Background(),
 	}
 }
 
@@ -62,7 +97,7 @@ func (s *Server) Auth() *auth.Service { return s.auth }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.routes(mux)
-	return logRequests(mux)
+	return s.logRequests(mux)
 }
 
 func (s *Server) routes(mux *http.ServeMux) {
@@ -71,16 +106,23 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// Público: o login e as ruínas (erros de propósito, para ver as telas).
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
+	mux.HandleFunc("POST /api/auth/device/start", s.handleDeviceStart)
+	mux.HandleFunc("POST /api/auth/device/token", s.handleDeviceToken)
 	mux.HandleFunc("GET /ruinas/{codigo}", s.handleRuina)
 	mux.HandleFunc("GET /api/ruinas", s.handleRuinasPlacar)
 
 	// Protegido.
 	mux.Handle("GET /api/auth/me", s.protected(s.handleMe))
 	mux.Handle("POST /api/auth/password", s.protected(s.handleChangePassword))
+	mux.Handle("POST /api/auth/device/approve", s.protected(s.handleDeviceApprove))
+	// Credencial curta para os players que só sabem abrir uma URL.
+	mux.Handle("POST /api/auth/media-token", s.protected(s.handleMediaToken))
 
 	mux.Handle("GET /api/home", s.protected(s.handleHome))
 	mux.Handle("GET /api/libraries", s.protected(s.handleLibraries))
 	mux.Handle("GET /api/titles", s.protected(s.handleTitles))
+	mux.Handle("GET /api/artistas", s.protected(s.handleArtistas))
+	mux.Handle("GET /api/artistas/{nome}", s.protected(s.handleArtista))
 	mux.Handle("GET /api/titles/{id}", s.protected(s.handleTitle))
 	mux.Handle("GET /api/files/{id}", s.protected(s.handleFile))
 	mux.Handle("GET /api/files/{id}/next", s.protected(s.handleNext))
@@ -94,6 +136,21 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/scan", s.adminOnly(s.handleScanStart))
 	mux.Handle("POST /api/metadata", s.adminOnly(s.handleMetadataStart))
 
+	// Telemetria do servidor: só o administrador.
+	mux.Handle("GET /api/metrics/status", s.adminOnly(s.handleMetricsStatus))
+	mux.Handle("GET /api/metrics/events", s.adminOnly(s.handleMetricsEvents))
+
+	// Coleções: listas montadas à mão, por usuário.
+	mux.Handle("GET /api/colecoes", s.protected(s.handleColecoes))
+	mux.Handle("POST /api/colecoes", s.protected(s.handleCriarColecao))
+	mux.Handle("GET /api/colecoes/{id}", s.protected(s.handleColecao))
+	mux.Handle("PUT /api/colecoes/{id}", s.protected(s.handleRenomearColecao))
+	mux.Handle("DELETE /api/colecoes/{id}", s.protected(s.handleApagarColecao))
+	mux.Handle("POST /api/colecoes/{id}/itens/{titulo}", s.protected(s.handleItemDaColecao))
+	mux.Handle("DELETE /api/colecoes/{id}/itens/{titulo}", s.protected(s.handleItemDaColecao))
+	mux.Handle("PUT /api/colecoes/{id}/ordem", s.protected(s.handleReordenarColecao))
+	mux.Handle("GET /api/titles/{id}/colecoes", s.protected(s.handleColecoesDoTitulo))
+
 	mux.Handle("GET /api/settings", s.protected(s.handleGetSettings))
 	mux.Handle("PUT /api/settings", s.adminOnly(s.handlePutSettings))
 
@@ -102,9 +159,18 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/titles/{id}/matches", s.protected(s.handleMatchSearch))
 	mux.Handle("POST /api/titles/{id}/match", s.protected(s.handleMatchApply))
 
-	mux.Handle("GET /stream/{id}", s.protected(s.handleStream))
-	mux.Handle("GET /img/file/{id}", s.protected(s.handleFileThumb))
-	mux.Handle("GET /img/{kind}/{name}", s.protected(s.handleImage))
+	mux.Handle("GET /api/files/{id}/faixas", s.protected(s.handleFaixas))
+	mux.Handle("GET /api/files/{id}/legenda/{idx}", s.midia(s.handleLegenda))
+	mux.Handle("GET /api/files/{id}/playback", s.protected(s.handlePlayback))
+	mux.Handle("POST /api/files/{id}/prepare", s.protected(s.handlePrepareStart))
+	mux.Handle("GET /api/files/{id}/prepare/events", s.protected(s.handlePrepareEvents))
+
+	// Tudo o que um player ou uma <img> abre por URL: sessão normal, ou o
+	// token de mídia em ?t= para quem não consegue mandar cookie nem cabeçalho.
+	mux.Handle("GET /stream/{id}", s.midia(s.handleStream))
+	mux.Handle("GET /preparado/{id}", s.midia(s.handlePreparado))
+	mux.Handle("GET /img/file/{id}", s.midia(s.handleFileThumb))
+	mux.Handle("GET /img/{kind}/{name}", s.midia(s.handleImage))
 
 	// O SPA embutido responde por todo o resto.
 	if web.Available() {
@@ -127,10 +193,18 @@ func (s *Server) adminOnly(h http.HandlerFunc) http.Handler {
 	return s.auth.RequireAdmin(h)
 }
 
+// midia embrulha o que é aberto por URL solta — vídeo, capa, legenda. Aceita a
+// sessão como qualquer rota protegida, e além dela o token de mídia.
+func (s *Server) midia(h http.HandlerFunc) http.Handler {
+	return s.auth.RequireMidia(h)
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
-		"time":   time.Now().Format(time.RFC3339),
+		"status":      "ok",
+		"time":        time.Now().Format(time.RFC3339),
+		"api_version": 2,
+		"features":    []string{"device_pairing", "playback_caps_v2"},
 	})
 }
 
@@ -149,7 +223,14 @@ func (s *Server) Serve(ctx context.Context, addr string) error {
 		return fmt.Errorf("ouvindo em %s: %w", addr, err)
 	}
 
+	// A partir daqui os preparos nascem deste contexto: cancelá-lo no shutdown
+	// interrompe o ffmpeg em vez de deixá-lo órfão queimando CPU.
+	s.fundo = ctx
+	s.startedAt = time.Now()
+	s.preparador.LimparParciais()
+
 	go s.cleanupLoop(ctx)
+	go s.amostraLoop(ctx)
 	s.StartBackgroundJobs(ctx)
 
 	errCh := make(chan error, 1)
@@ -227,11 +308,29 @@ func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
 	return io.Copy(r.ResponseWriter, src)
 }
 
-func logRequests(next http.Handler) http.Handler {
+func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rec.status, time.Since(start).Round(time.Millisecond))
+		duracao := time.Since(start)
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rec.status, duracao.Round(time.Millisecond))
+
+		// r.Pattern é preenchido pelo ServeMux durante o roteamento e continua
+		// legível aqui, depois do ServeHTTP — é por isso que o middleware pode
+		// continuar envolvendo o mux inteiro em vez de ser reestruturado.
+		// Agregar por padrão ("GET /api/titles/{id}") e não pelo caminho
+		// resolvido evita cardinalidade infinita vinda dos IDs.
+		s.coletor.Observa(r.Pattern, rec.status, duracao, respostaLonga(rec.Header().Get("Content-Type")))
 	})
+}
+
+// respostaLonga reconhece as respostas que ficam abertas de propósito —
+// streaming de mídia e SSE. Detectar pelo Content-Type, e não por uma lista de
+// rotas, faz uma rota de streaming futura já nascer excluída.
+func respostaLonga(contentType string) bool {
+	ct := strings.ToLower(contentType)
+	return strings.HasPrefix(ct, "video/") ||
+		strings.HasPrefix(ct, "audio/") ||
+		strings.HasPrefix(ct, "text/event-stream")
 }

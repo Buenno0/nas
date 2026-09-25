@@ -78,6 +78,34 @@ export interface ContinueItem {
   duration: number
 }
 
+export interface FotoDoDia extends FileInfo {
+  title_id: number
+}
+
+export interface ArtistaCard {
+  nome: string
+  albuns: number
+  faixas: number
+  duracao: number
+  poster?: string
+}
+
+export interface ArtistaDetalhe {
+  nome: string
+  albuns: TitleCard[]
+  faixas: FileInfo[]
+  duracao: number
+}
+
+export interface Colecao {
+  id: number
+  nome: string
+  itens: number
+  poster?: string
+  criada_em: number
+  atualizada_em: number
+}
+
 export interface HomeRow {
   key: string
   title: string
@@ -87,6 +115,10 @@ export interface HomeRow {
 export interface HomeResponse {
   hero?: TitleCard
   continue: ContinueItem[]
+  /** Começado há mais de 30 dias e nunca terminado. */
+  esquecidos?: ContinueItem[]
+  /** Fotos deste mesmo dia, em anos anteriores. */
+  no_dia?: FotoDoDia[]
   rows: HomeRow[]
 }
 
@@ -109,6 +141,52 @@ export interface FileInfo {
   season?: number
   episode?: number
   episode_name?: string
+  /** Foto: data de captura (EXIF), com o mtime do arquivo como reserva. */
+  quando?: number
+}
+
+export type PlaybackMode = 'direct' | 'remux' | 'audio' | 'video'
+
+export interface PreparoProgresso {
+  estado: 'ausente' | 'fila' | 'trabalhando' | 'pronto' | 'erro'
+  receita?: string
+  segundos_prontos: number
+  segundos_total: number
+  percentual: number
+  velocidade: number
+  restante_segundos: number
+  erro?: string
+}
+
+export interface PlaybackPlan {
+  modo: PlaybackMode
+  motivo: string
+  /** Vazio enquanto o preparo não terminou. */
+  url: string
+  url_direta: string
+  preparo?: PreparoProgresso
+  ffmpeg: boolean
+  transcodificacao_ativa: boolean
+}
+
+export interface Faixa {
+  idx: number
+  codec?: string
+  lang?: string
+  rotulo: string
+  canais?: number
+  padrao?: boolean
+  forcada?: boolean
+  externa?: boolean
+  /** Só legenda: a URL do WebVTT já convertido. */
+  url?: string
+  /** Preenchido quando a faixa existe mas não dá para usar (legenda de imagem). */
+  indisponivel?: string
+}
+
+export interface Faixas {
+  audio: Faixa[]
+  legendas: Faixa[]
 }
 
 export interface PlaybackInfo extends FileInfo {
@@ -181,6 +259,47 @@ export interface ScanStatus {
   last_error?: string
 }
 
+export interface ProcessSample {
+  cpu_percent: number
+  cpu_nucleos: number
+  heap_bytes: number
+  rss_pico_bytes: number
+  goroutines: number
+  nucleos: number
+}
+
+export interface RouteSnapshot {
+  rota: string
+  total: number
+  erros_4xx: number
+  erros_5xx: number
+  taxa_erro: number
+  media_ms: number
+  max_ms: number
+  p50_ms: number
+  p95_ms: number
+}
+
+export interface TrafficSummary {
+  total: number
+  erros: number
+  taxa_erro: number
+  descartadas?: number
+  rotas: RouteSnapshot[]
+}
+
+export interface MetricsSnapshot {
+  uptime_segundos: number
+  modo: 'local' | 'tunnel'
+  processo: ProcessSample
+  disco_livre_bytes: number
+  disco_total_bytes: number
+  disco_reserva_bytes: number
+  cache_usado_bytes: number
+  cache_limite_bytes: number
+  trafego: TrafficSummary
+}
+
 export interface TitleQuery {
   library?: number
   kind?: TitleKind
@@ -212,12 +331,47 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ current, new: next }),
     }),
+  approveDevice: (userCode: string) =>
+    request<{ ok: boolean; device_name: string }>('/api/auth/device/approve', {
+      method: 'POST',
+      body: JSON.stringify({ user_code: userCode }),
+    }),
 
   home: () => request<HomeResponse>('/api/home'),
   libraries: () => request<Library[]>('/api/libraries'),
+  colecoes: () => request<Colecao[]>('/api/colecoes'),
+  colecao: (id: number) =>
+    request<{ colecao: Colecao; itens: TitleCard[] }>(`/api/colecoes/${id}`),
+  criarColecao: (nome: string) =>
+    request<Colecao>('/api/colecoes', { method: 'POST', body: JSON.stringify({ nome }) }),
+  renomearColecao: (id: number, nome: string) =>
+    request<{ ok: boolean }>(`/api/colecoes/${id}`, { method: 'PUT', body: JSON.stringify({ nome }) }),
+  apagarColecao: (id: number) =>
+    request<{ ok: boolean }>(`/api/colecoes/${id}`, { method: 'DELETE' }),
+  adicionarNaColecao: (id: number, titleId: number) =>
+    request<{ ok: boolean }>(`/api/colecoes/${id}/itens/${titleId}`, { method: 'POST' }),
+  removerDaColecao: (id: number, titleId: number) =>
+    request<{ ok: boolean }>(`/api/colecoes/${id}/itens/${titleId}`, { method: 'DELETE' }),
+  colecoesDoTitulo: (titleId: number) =>
+    request<{ colecoes: number[] }>(`/api/titles/${titleId}/colecoes`),
+
+  artistas: () => request<ArtistaCard[]>('/api/artistas'),
+  artista: (nome: string) => request<ArtistaDetalhe>(`/api/artistas/${encodeURIComponent(nome)}`),
   titles: (params: TitleQuery = {}) => request<TitlesPage>(`/api/titles${query(params)}`),
   title: (id: number) => request<TitleDetail>(`/api/titles/${id}`),
   file: (fileId: number) => request<PlaybackInfo>(`/api/files/${fileId}`),
+
+  /** O que tocar e em que estado está o preparo. Não gasta CPU: só consulta. */
+  playback: (fileId: number, audio?: number) =>
+    request<PlaybackPlan>(`/api/files/${fileId}/playback${planoQuery(audio)}`),
+  /** Faixas de áudio e legendas disponíveis. */
+  faixas: (fileId: number) => request<Faixas>(`/api/files/${fileId}/faixas`),
+  /** Manda o servidor preparar o arquivo (idempotente: pedidos repetidos
+   *  compartilham um único ffmpeg). */
+  prepare: (fileId: number, audio?: number) =>
+    request<PreparoProgresso>(`/api/files/${fileId}/prepare${planoQuery(audio)}`, { method: 'POST' }),
+  prepareEventsUrl: (fileId: number, audio?: number) =>
+    `/api/files/${fileId}/prepare/events${planoQuery(audio)}`,
   nextEpisode: (fileId: number) => request<{ next: number | null }>(`/api/files/${fileId}/next`),
 
   saveProgress: (fileId: number, position: number, duration: number) =>
@@ -235,6 +389,9 @@ export const api = {
   refreshMetadata: (all = false) =>
     request<{ started: boolean }>(`/api/metadata${all ? '?all=1' : ''}`, { method: 'POST' }),
 
+  metrics: () => request<MetricsSnapshot>('/api/metrics/status'),
+  metricsEventsUrl: () => '/api/metrics/events',
+
   settings: () => request<Settings>('/api/settings'),
   saveSettings: (patch: Partial<Record<'tmdb_key' | 'tmdb_lang' | 'scan_every', string>>) =>
     request<Settings>('/api/settings', { method: 'PUT', body: JSON.stringify(patch) }),
@@ -248,6 +405,39 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tmdb_id: tmdbId }),
     }),
+}
+
+/**
+ * O que ESTE navegador sabe decodificar, perguntado a ele em vez de deduzido do
+ * User-Agent. Safari toca HEVC por hardware; sem essa negociação, o servidor
+ * recodificaria de graça e queimaria CPU do Mac.
+ */
+function capacidades(): string[] {
+  const suportado = (tipo: string) =>
+    typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported
+      ? MediaSource.isTypeSupported(tipo)
+      : document.createElement('video').canPlayType(tipo) !== ''
+
+  const lista: string[] = []
+  if (suportado('video/mp4; codecs="hvc1.1.6.L93.B0"')) lista.push('hevc')
+  if (suportado('video/webm; codecs="vp9"')) lista.push('vp9')
+  if (suportado('video/mp4; codecs="av01.0.05M.08"')) lista.push('av1')
+  return lista
+}
+
+/**
+ * Os parâmetros que participam da escolha da receita no servidor — e portanto
+ * da chave do cache de preparo. Precisam ser IDÊNTICOS entre consultar o plano,
+ * pedir o preparo, acompanhar o progresso e buscar o arquivo pronto: divergir
+ * em um deles faria o player esperar por um preparo e pedir outro.
+ */
+function planoQuery(audio?: number): string {
+  const q = new URLSearchParams()
+  const caps = capacidades()
+  if (caps.length > 0) q.set('can', caps.join(','))
+  if (audio !== undefined) q.set('audio', String(audio))
+  const s = q.toString()
+  return s ? `?${s}` : ''
 }
 
 export const streamUrl = (fileId: number) => `/stream/${fileId}`

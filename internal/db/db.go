@@ -49,6 +49,24 @@ func OpenAt(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("abrindo banco: %w", err)
 	}
+
+	// Pool. Isto NÃO é ganho de latência: medido com 10 goroutines em paralelo,
+	// a diferença contra o padrão do database/sql ficou dentro do ruído
+	// (204µs contra 208µs por query). É um teto de recurso.
+	//
+	// O padrão abre conexões sem limite, e cada conexão SQLite carrega seu
+	// próprio cache de páginas. Uma rajada — um celular abrindo a home enquanto
+	// o scan indexa — poderia abrir dezenas e a memória subiria sem motivo, já
+	// que SQLite serializa escrita e passar de um punhado de conexões não dá
+	// vazão nenhuma. Guardar tantas ociosas quantas abertas evita fechar e
+	// reabrir (cada abertura reexecuta os quatro _pragma do DSN).
+	const conexoes = 8
+	sqlDB.SetMaxOpenConns(conexoes)
+	sqlDB.SetMaxIdleConns(conexoes)
+	// Sem expiração: o banco é um arquivo local, uma conexão não "envelhece"
+	// como a de um servidor remoto atrás de balanceador.
+	sqlDB.SetConnMaxLifetime(0)
+
 	if err := sqlDB.Ping(); err != nil {
 		sqlDB.Close()
 		return nil, fmt.Errorf("conectando ao banco: %w", err)

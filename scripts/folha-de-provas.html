@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Folha de provas — Ozymandias</title>
+<!-- Servida por ./scripts/folha-de-provas.sh, que monta sistema.css e fonts/
+     a partir do build mais recente. Abrir este arquivo direto no navegador não
+     funciona: sem o CSS compilado não há token nenhum para provar. -->
+<link rel="stylesheet" href="./sistema.css">
+<style>
+  /* Só a moldura da folha; tudo que está sendo provado usa as classes reais. */
+  .folha { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+  .secao { margin-top: 40px; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+  .sw { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .sw i { display: block; height: 52px; }
+  .sw b { display: block; padding: 6px 8px; font-size: 11px; font-weight: 500; }
+  .sw code { display: block; padding: 0 8px 7px; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="folha">
+
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <p class="rotulo">Ozymandias · design system</p>
+      <h1 class="mt-1 text-2xl font-semibold tracking-tight">Folha de provas — paleta ruína</h1>
+    </div>
+    <button id="tema" type="button"
+      class="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium transition hover:bg-elev">
+      Trocar tema
+    </button>
+  </div>
+
+  <section class="secao">
+    <p class="rotulo mb-3">Tokens</p>
+    <div class="swatches" id="swatches"></div>
+  </section>
+
+  <section class="secao">
+    <p class="rotulo mb-3">Receitas — as classes que se repetem</p>
+    <div class="rounded-xl border border-line bg-surface p-5">
+      <div class="flex flex-wrap items-center gap-3">
+        <button class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink transition hover:opacity-90">
+          Assistir
+        </button>
+        <button class="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium transition hover:bg-elev">
+          Escanear agora
+        </button>
+        <button class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-60" disabled>
+          Desabilitado
+        </button>
+        <span class="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-muted">★</span>
+        <span class="rounded-md bg-elev px-2 py-0.5 text-[11px] text-muted">Filme</span>
+      </div>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <input class="w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+               placeholder="Buscar no acervo">
+        <label class="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5">
+          <span class="text-muted">⌕</span>
+          <input class="w-full bg-transparent text-sm outline-none placeholder:text-muted" placeholder="Campo em pílula">
+        </label>
+      </div>
+      <p class="mt-4 text-sm leading-relaxed text-muted">
+        Texto secundário no tamanho padrão do produto (14px). Separação sempre por borda de 1px em
+        <code class="font-mono text-xs text-ink">--line</code>; nenhuma sombra eleva cartão.
+      </p>
+    </div>
+  </section>
+
+  <section class="secao">
+    <p class="rotulo mb-3">Semânticas</p>
+    <div class="rounded-xl border border-line bg-surface p-5">
+      <div class="flex flex-wrap gap-4 text-sm">
+        <span class="rounded-full bg-ok/15 px-3 py-1 font-medium text-ok">Scan concluído</span>
+        <span class="text-warn">⚠ Codec não suportado</span>
+        <span class="text-danger">Falha ao ler a pasta</span>
+      </div>
+      <div class="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        senha ou usuário inválidos
+      </div>
+      <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-elev">
+        <div class="h-full w-2/3 bg-accent"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="secao">
+    <p class="rotulo mb-3">Pôsteres sem capa — o arco quente</p>
+    <div class="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-7" id="posteres"></div>
+  </section>
+
+  <section class="secao">
+    <p class="rotulo mb-3">Navegação</p>
+    <div class="w-60 rounded-xl border border-line bg-surface p-3">
+      <p class="rotulo px-3 pt-2 pb-1">Bibliotecas</p>
+      <a class="flex items-center gap-3 rounded-lg bg-elev px-3 py-2 text-sm font-medium text-ink">◆ Filmes</a>
+      <a class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-elev/60 hover:text-ink">◆ Séries</a>
+      <a class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-elev/60 hover:text-ink">◆ Música</a>
+      <div class="mt-1 rounded-xl border border-line bg-elev/55 p-1">
+        <div class="flex items-center gap-3 px-3 py-2 text-left">
+          <span class="text-warn">⚠</span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold text-ink">Ruínas</span>
+            <span class="rotulo block truncate text-accent">Escolha como tudo termina</span>
+          </span>
+        </div>
+        <div class="mx-3 mb-2 ml-6 border-l border-line pl-3">
+          <a class="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted"><span class="font-mono font-semibold text-accent">401</span> Entrada proibida</a>
+          <a class="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted"><span class="font-mono font-semibold text-warn">404</span> Caminho perdido</a>
+          <a class="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted"><span class="font-mono font-semibold text-danger">500</span> Colapso final</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+  // Mesma função de web/src/lib/format.ts — a folha prova o código, não uma cópia à mão.
+  const ARCO_INICIO = 25, ARCO_TAMANHO = 95
+  function gradientFor(name) {
+    let hash = 0
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+    const hue = ARCO_INICIO + (hash % ARCO_TAMANHO)
+    return `linear-gradient(145deg, oklch(0.42 0.085 ${hue}), oklch(0.25 0.055 ${hue + 22}))`
+  }
+  const titulos = ['Duna', 'Blade Runner', 'Stalker', 'Aguirre', 'O Sétimo Selo', 'Persona', 'Solaris',
+                   'Andrei Rublev', 'Nostalgia', 'Sacrifício', 'A Palavra', 'Ordet', 'Vampyr', 'Ugetsu']
+  document.getElementById('posteres').innerHTML = titulos.map((t) => `
+    <div>
+      <div class="relative aspect-[2/3] overflow-hidden rounded-xl bg-elev ring-1 ring-line">
+        <div class="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center" style="background:${gradientFor(t)}">
+          <span class="text-2xl font-semibold text-white/90">${t.slice(0, 2).toUpperCase()}</span>
+          <span class="text-[11px] leading-tight font-medium text-white/70">${t}</span>
+        </div>
+        <span class="absolute top-2 left-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white/90">Filme</span>
+      </div>
+      <p class="mt-2 line-clamp-1 text-sm font-medium text-ink">${t}</p>
+      <p class="text-xs text-muted">1979 · 2h 41min</p>
+    </div>`).join('')
+
+  const tokens = ['bg', 'surface', 'elev', 'line', 'ink', 'muted', 'accent', 'accent-ink', 'ok', 'warn', 'danger']
+  const pintar = () => {
+    const cs = getComputedStyle(document.documentElement)
+    document.getElementById('swatches').innerHTML = tokens.map((t) => {
+      const v = cs.getPropertyValue('--' + t).trim()
+      return `<div class="sw"><i style="background:${v}"></i><b>--${t}</b><code>${v}</code></div>`
+    }).join('')
+  }
+  pintar()
+  document.getElementById('tema').onclick = () => {
+    const r = document.documentElement
+    r.classList.toggle('light'); r.classList.toggle('dark')
+    pintar()
+  }
+</script>
+</body>
+</html>

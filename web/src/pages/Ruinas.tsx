@@ -19,7 +19,7 @@ const iscas = [
     titulo: 'Entrada proibida',
     chamada: 'Abra a passagem selada',
     detalhe: 'O guardião exige uma identidade antes de deixar você passar.',
-    cor: 'from-violet-500/20',
+    cor: 'from-accent/20',
   },
   {
     codigo: 404,
@@ -27,7 +27,7 @@ const iscas = [
     titulo: 'Caminho perdido',
     chamada: 'Siga a rota que não existe',
     detalhe: 'Não há nada no destino, além de areia e uma estátua esquecida.',
-    cor: 'from-amber-500/20',
+    cor: 'from-warn/20',
   },
   {
     codigo: 500,
@@ -35,7 +35,7 @@ const iscas = [
     titulo: 'Colapso final',
     chamada: 'Veja o servidor desabar',
     detalhe: 'A obra inteira ruiu. É um desastre controlado: o acervo continua intacto.',
-    cor: 'from-rose-500/20',
+    cor: 'from-danger/20',
   },
 ] as const
 
@@ -136,7 +136,7 @@ export function Ruinas() {
       </section>
 
       <p className="mt-6 flex items-start gap-2 text-xs leading-relaxed text-muted">
-        <WarningIcon className="shrink-0 text-amber-400" />
+        <WarningIcon className="shrink-0 text-warn" />
         {data?.total ?? 0} visitas ao todo. A contagem vive na memória do servidor e zera quando ele
         reinicia — ninguém está sendo registrado.
       </p>

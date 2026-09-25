@@ -158,6 +158,20 @@ func (d *DB) RecentTitles(ctx context.Context, limit int) ([]TitleCard, error) {
 	return cards, rows.Err()
 }
 
+// coletarCards materializa um resultado de titleCardSelect. Existe porque cada
+// prateleira nova repetiria o mesmo laço de scan linha a linha.
+func coletarCards(rows *sql.Rows) ([]TitleCard, error) {
+	cards := []TitleCard{}
+	for rows.Next() {
+		c, err := scanCard(rows)
+		if err != nil {
+			return nil, err
+		}
+		cards = append(cards, c)
+	}
+	return cards, rows.Err()
+}
+
 func scanCard(rows *sql.Rows) (TitleCard, error) {
 	var c TitleCard
 	var kind string
@@ -180,9 +194,22 @@ type ContinueItem struct {
 	Duration  float64   `json:"duration"`
 }
 
-// ContinueWatching traz o que foi deixado pela metade, do mais recente para o
-// mais antigo. Ignora o que mal começou (menos de 30s) e o que já acabou.
+// ContinueWatching traz o que foi deixado pela metade nos últimos 30 dias, do
+// mais recente para o mais antigo. Ignora o que mal começou (menos de 30s) e o
+// que já acabou.
+//
+// O corte de 30 dias existe para a lista não virar cemitério: o que foi
+// abandonado há meses aparece em "Esquecidos", com esse nome, em vez de fingir
+// que é a sessão de ontem. A união das duas prateleiras é tudo que foi começado
+// e não terminado — nada deixou de ser exibido.
 func (d *DB) ContinueWatching(ctx context.Context, userID int64, limit int) ([]ContinueItem, error) {
+	corte := time.Now().AddDate(0, 0, -diasParaEsquecer).Unix()
+	return d.continuarQuery(ctx, `p.updated_at >= ?`, `p.updated_at DESC`, userID, corte, limit)
+}
+
+// continuarQuery é o corpo compartilhado por "continuar assistindo" e
+// "esquecidos": mesma junção, mesmos critérios, só muda a janela de tempo.
+func (d *DB) continuarQuery(ctx context.Context, filtro, ordem string, userID, corte int64, limit int) ([]ContinueItem, error) {
 	rows, err := d.QueryContext(ctx, `
 		SELECT p.media_file_id, t.id, t.name, t.kind, t.poster, t.backdrop,
 		       p.position_sec, MAX(p.duration_sec, IFNULL(f.duration, 0)),
@@ -192,8 +219,9 @@ func (d *DB) ContinueWatching(ctx context.Context, userID int64, limit int) ([]C
 		  JOIN titles t      ON t.id = f.title_id
 		  LEFT JOIN episodes e ON e.media_file_id = f.id
 		 WHERE p.user_id = ? AND p.finished = 0 AND p.position_sec > 30
-		 ORDER BY p.updated_at DESC
-		 LIMIT ?`, userID, limit)
+		   AND `+filtro+`
+		 ORDER BY `+ordem+`
+		 LIMIT ?`, userID, corte, limit)
 	if err != nil {
 		return nil, fmt.Errorf("continuar assistindo: %w", err)
 	}
@@ -239,6 +267,9 @@ type FileInfo struct {
 	Season   int       `json:"season,omitempty"`
 	Episode  int       `json:"episode,omitempty"`
 	EpName   string    `json:"episode_name,omitempty"`
+	// Quando é a data de captura da foto, com o mtime do arquivo como reserva.
+	// A galeria agrupa por ela.
+	Quando int64 `json:"quando,omitempty"`
 	// TagName é o título vindo das tags do arquivo (música).
 	TagName string `json:"-"`
 }
@@ -251,12 +282,19 @@ func (d *DB) TitleFiles(ctx context.Context, titleID, userID int64) ([]FileInfo,
 		       IFNULL(f.width, 0), IFNULL(f.height, 0), f.vcodec, f.acodec,
 		       IFNULL(f.track, 0), f.thumb, f.display_name,
 		       IFNULL(p.position_sec, 0), IFNULL(p.finished, 0),
-		       IFNULL(e.season, 0), IFNULL(e.episode, 0), IFNULL(e.name, '')
+		       IFNULL(e.season, 0), IFNULL(e.episode, 0), IFNULL(e.name, ''),
+		       IFNULL(NULLIF(f.taken_at, 0), f.mtime)
 		  FROM media_files f
 		  LEFT JOIN progress p ON p.media_file_id = f.id AND p.user_id = ?
 		  LEFT JOIN episodes e ON e.media_file_id = f.id
 		 WHERE f.title_id = ?
-		 ORDER BY IFNULL(e.season, 0), IFNULL(e.episode, 0), IFNULL(f.track, 0), f.rel_path`,
+		 -- Série e álbum ordenam por episódio e faixa. Foto não tem nem um nem
+		 -- outro (ambos zero), então cai no critério seguinte: a data, do mais
+		 -- recente para o mais antigo, que é como se olha um álbum de fotos.
+		 ORDER BY IFNULL(e.season, 0), IFNULL(e.episode, 0), IFNULL(f.track, 0),
+		          CASE WHEN f.media_type = 'photo'
+		               THEN -IFNULL(NULLIF(f.taken_at, 0), f.mtime) ELSE 0 END,
+		          f.rel_path`,
 		userID, titleID)
 	if err != nil {
 		return nil, fmt.Errorf("arquivos do título: %w", err)
@@ -272,7 +310,7 @@ func (d *DB) TitleFiles(ctx context.Context, titleID, userID int64) ([]FileInfo,
 		)
 		if err := rows.Scan(&fi.ID, &fi.RelPath, &fi.Ext, &mtype, &fi.Size, &fi.Duration,
 			&fi.Width, &fi.Height, &fi.VCodec, &fi.ACodec, &fi.Track, &fi.Thumb, &fi.TagName,
-			&fi.Position, &finished, &fi.Season, &fi.Episode, &fi.EpName); err != nil {
+			&fi.Position, &finished, &fi.Season, &fi.Episode, &fi.EpName, &fi.Quando); err != nil {
 			return nil, err
 		}
 		fi.Type = MediaType(mtype)
@@ -338,10 +376,11 @@ func (d *DB) FileByID(ctx context.Context, id int64) (MediaFile, error) {
 	err := d.QueryRowContext(ctx, `
 		SELECT id, library_id, title_id, path, rel_path, ext, size, mtime, media_type,
 		       IFNULL(duration, 0), IFNULL(width, 0), IFNULL(height, 0), vcodec, acodec,
-		       IFNULL(track, 0), thumb
+		       IFNULL(track, 0), thumb, pix_fmt, vprofile, channels, vbitrate
 		  FROM media_files WHERE id = ?`, id).
 		Scan(&f.ID, &f.LibraryID, &titleID, &f.Path, &f.RelPath, &f.Ext, &f.Size, &f.MTime,
-			&mtype, &f.Duration, &f.Width, &f.Height, &f.VCodec, &f.ACodec, &f.Track, &f.Thumb)
+			&mtype, &f.Duration, &f.Width, &f.Height, &f.VCodec, &f.ACodec, &f.Track, &f.Thumb,
+			&f.PixFmt, &f.VProfile, &f.Channels, &f.VBitrate)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MediaFile{}, ErrNotFound
 	}
