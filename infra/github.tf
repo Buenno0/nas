@@ -8,6 +8,12 @@ variable "repo_github" {
   default     = "Buenno0/nas"
 }
 
+variable "repo_github_imutavel" {
+  description = "Prefixo do sub no formato imutável do GitHub (dono@id/repo@id). Veja em /repos/<dono>/<repo>/actions/oidc/customization/sub."
+  type        = string
+  default     = "repo:Buenno0@160802402/nas@1334700693"
+}
+
 resource "aws_iam_openid_connect_provider" "github" {
   count          = var.repo_github == "" ? 0 : 1
   url            = "https://token.actions.githubusercontent.com"
@@ -28,8 +34,13 @@ resource "aws_iam_role" "github" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          # Só push na master: PR de fork, outro branch ou tag não entram.
-          "token.actions.githubusercontent.com:sub" = "repo:${var.repo_github}:ref:refs/heads/master"
+          # Só push na master: PR de fork, outro branch ou tag não entram. O
+          # formato imutável (com os IDs numéricos) não muda se a repo for
+          # renomeada ou recriada com o mesmo nome por outra pessoa.
+          "token.actions.githubusercontent.com:sub" = compact([
+            "repo:${var.repo_github}:ref:refs/heads/master",
+            var.repo_github_imutavel == "" ? "" : "${var.repo_github_imutavel}:ref:refs/heads/master",
+          ])
         }
       }
     }]
