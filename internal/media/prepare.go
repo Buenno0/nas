@@ -370,3 +370,7 @@ func primeiraLinha(s string) string {
 	}
 	return s
 }
+
+// Ocupado diz se todas as vagas de ffmpeg estão em uso: um pedido novo iria
+// para a fila. É um dos sinais para mandar o preparo para a nuvem.
+func (p *Preparador) Ocupado() bool { return len(p.vagas) == 0 }

@@ -18,6 +18,7 @@ import (
 	"nas/internal/cloud"
 	"nas/internal/config"
 	"nas/internal/db"
+	"nas/internal/energia"
 	"nas/internal/media"
 	"nas/internal/metrics"
 	"nas/internal/sincro"
@@ -34,6 +35,9 @@ type Options struct {
 	// NaNuvem: esta é a instância cloud (nas serve --nuvem). Ela não tem
 	// disco de mídia nem é dona de usuários; o que só o Mac faz é recusado.
 	NaNuvem bool
+	// Energia informa bateria e temperatura do Mac para o bursting. Nil = um
+	// Mac sempre na tomada e frio, que nunca manda preparo para a nuvem.
+	Energia *energia.Leitor
 }
 
 // Server agrupa as dependências dos handlers.
@@ -80,6 +84,9 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 	dir, err := config.PrepareDir()
 	if err != nil {
 		log.Printf("cache de preparo indisponível: %v", err)
+	}
+	if opts.Energia == nil {
+		opts.Energia = energia.Fixo(energia.Estado{})
 	}
 	chave := opts.Nuvem
 	if chave == nil {

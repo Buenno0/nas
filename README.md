@@ -784,7 +784,24 @@ Para subir: crie uma auth key do Tailscale reutilizável, efêmera e com a tag
 instância cloud simplesmente não é criada. Alarmes por e-mail: eventos na DLQ
 e instância fora do ar por 10 minutos.
 
-Ainda não existe (fase seguinte do plano): bursting do Mac para os workers.
+**Bursting (V5).** Quando um arquivo que está no Mac *e* no bucket precisa de
+preparo e o Mac não está numa boa hora — na bateria, quente (`pmset`) ou com
+as vagas de ffmpeg ocupadas —, o preparo vai para os workers da nuvem e o
+player toca o `compat.mp4` deles. Na tomada e frio, o Mac prepara com o
+VideoToolbox, como sempre. Arquivos só locais nunca vão: subir GBs custa mais
+que recodificar aqui. A decisão gruda enquanto o worker trabalha, e o estado
+da energia aparece em Configurações → Sincronização.
+
+**Caos do kill switch.** Há testes que acionam o corte no meio de um envio,
+de uma fixação (o download para, o parcial fica e a retomada termina com o
+arquivo idêntico), do long-poll da fila (cai em menos de 100 ms, sem esperar
+os 20 s do SQS) e de um ffmpeg travado lendo da nuvem (morre em vez de
+esperar o prazo de 2 minutos).
+
+**Auditoria.** `infra/auditoria.tf` liga o IAM Access Analyzer (acesso
+externo, gratuito; o de permissões não usadas é opcional e pago) e uma trilha
+do CloudTrail num bucket separado, com eventos de gestão e as remoções de
+objetos da mídia, expirando em 90 dias.
 
 ## Limitações conhecidas
 

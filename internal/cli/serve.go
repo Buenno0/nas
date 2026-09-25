@@ -13,6 +13,7 @@ import (
 	"nas/internal/cloud"
 	"nas/internal/config"
 	"nas/internal/db"
+	"nas/internal/energia"
 	"nas/internal/lock"
 	"nas/internal/tunnel"
 )
@@ -106,6 +107,7 @@ func serve(ctx context.Context, m mode, portOverride int, tunnelName string, sem
 		SecureCookies: m == modeTunnel,
 		TrustProxy:    m == modeTunnel,
 		Nuvem:         chave,
+		Energia:       energia.NovoLeitor(),
 	})
 	if m == modeLocal {
 		stopDiscovery, err := announceOzymandias(cfg.Port)

@@ -51,7 +51,9 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if db.SoNaNuvem(file.Localizacao) {
+	// Item só da nuvem, ou o derivado de um item que também está no Mac (o
+	// MP4 que o worker preparou no bursting).
+	if db.SoNaNuvem(file.Localizacao) || r.URL.Query().Get("derivado") != "" {
 		s.streamDaNuvem(w, r, file)
 		return
 	}

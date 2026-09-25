@@ -181,8 +181,7 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Item só da nuvem: toca direto da CDN/bucket ou não toca. O preparo
-	// (transcodificação) de itens da nuvem é trabalho dos workers do V3.
+	// Item só da nuvem: toca direto da CDN/bucket ou não toca.
 	if db.SoNaNuvem(arquivo.Localizacao) {
 		if s.nuvem.Modo() != cloud.ModoHibrido {
 			resp.Indisponivel = true
@@ -195,21 +194,21 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, resp)
 			return
 		}
-		// Não toca direto: vale o MP4 compatível que o worker gerou. Sem ele,
-		// o player segue o mesmo fluxo de preparo do Mac, só que quem prepara
-		// é a nuvem.
-		progresso := s.progressoNaNuvem(r.Context(), arquivo)
-		resp.Preparo = &progresso
-		resp.FFmpeg, resp.Ativo = true, s.ConfigNuvem().FilaJobs != ""
-		if progresso.Estado == media.EstadoPronto {
-			resp.URL = resp.URLDireta + "?derivado=compat"
-		} else if !resp.Ativo {
-			// Sem worker configurado: a única chance é o original.
-			resp.Motivo += " · sem processamento na nuvem, tentando o original"
-			resp.Modo, resp.URL, resp.Preparo = media.ModeDirect, resp.URLDireta, nil
-		}
+		s.respostaDaNuvem(r.Context(), &resp, arquivo, true)
 		writeJSON(w, http.StatusOK, resp)
 		return
+	}
+
+	// Bursting: o arquivo também está no bucket e o Mac não está numa boa
+	// hora (bateria, calor, fila cheia). O worker prepara; o player espera
+	// igual, só que sem gastar a bateria.
+	if plano.Mode != media.ModeDirect {
+		if ok, porque := s.prepararNaNuvem(r.Context(), arquivo, pedido); ok {
+			resp.Motivo += " · preparando na nuvem: " + porque
+			s.respostaDaNuvem(r.Context(), &resp, arquivo, false)
+			writeJSON(w, http.StatusOK, resp)
+			return
+		}
 	}
 
 	if plano.Mode == media.ModeDirect {
@@ -276,6 +275,14 @@ func (s *Server) handlePrepareStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "este arquivo já toca direto, não há o que preparar")
 		return
 	}
+	if ok, _ := s.prepararNaNuvem(r.Context(), arquivo, pedido); ok {
+		if err := s.sincro.PedirProcessamento(r.Context(), arquivo.ID); err != nil {
+			writeError(w, statusDaSincro(err), err.Error())
+			return
+		}
+		writeJSON(w, http.StatusAccepted, s.progressoNaNuvem(r.Context(), arquivo))
+		return
+	}
 
 	// O trabalho vive no contexto do servidor, não da requisição: o navegador
 	// pode desistir, o preparo continua; `nas stop` mata o ffmpeg junto.
@@ -301,6 +308,9 @@ func (s *Server) handlePrepareEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	_, pedido := s.planoDeArquivo(r, arquivo)
 	daNuvem := db.SoNaNuvem(arquivo.Localizacao)
+	if !daNuvem {
+		daNuvem, _ = s.prepararNaNuvem(r.Context(), arquivo, pedido)
+	}
 	consulta := func() media.Progresso {
 		if daNuvem {
 			return s.progressoNaNuvem(r.Context(), arquivo)
@@ -369,6 +379,55 @@ func (s *Server) handlePreparado(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Cache-Control", "private, max-age=0")
 	http.ServeContent(w, r, filepath.Base(progresso.Arquivo), info.ModTime(), f)
+}
+
+// respostaDaNuvem preenche o plano para um preparo feito pelo worker: o MP4
+// compatível pronto, ou o progresso de espera. soNuvem diz se o original
+// está só no bucket (sem worker, a única chance é tentar ele).
+func (s *Server) respostaDaNuvem(ctx context.Context, resp *respostaPlayback, arquivo db.MediaFile, soNuvem bool) {
+	progresso := s.progressoNaNuvem(ctx, arquivo)
+	resp.Preparo = &progresso
+	resp.FFmpeg, resp.Ativo = true, s.ConfigNuvem().FilaJobs != ""
+	if progresso.Estado == media.EstadoPronto {
+		resp.URL = resp.URLDireta + "?derivado=compat"
+	} else if !resp.Ativo && soNuvem {
+		resp.Motivo += " · sem processamento na nuvem, tentando o original"
+		resp.Modo, resp.URL, resp.Preparo = media.ModeDirect, resp.URLDireta, nil
+	}
+}
+
+// prepararNaNuvem decide o bursting de um arquivo que está no Mac E no
+// bucket. Nunca para um arquivo só local: subir GBs custa mais que o
+// VideoToolbox do M4 recodificar. A decisão gruda: um pedido feito ao worker
+// continua valendo até ele responder, para o player não alternar entre os
+// dois preparos.
+func (s *Server) prepararNaNuvem(ctx context.Context, arquivo db.MediaFile, pedido media.Pedido) (bool, string) {
+	if arquivo.Localizacao != db.LocalAmbos || arquivo.NuvemKey == "" {
+		return false, ""
+	}
+	if s.nuvem.Modo() != cloud.ModoHibrido || s.ConfigNuvem().FilaJobs == "" {
+		return false, ""
+	}
+	if s.preparador.Consultar(pedido).Estado == media.EstadoPronto {
+		return false, "" // já está pronto aqui: servir do disco é de graça
+	}
+	if _, err := s.db.DerivadoDe(ctx, arquivo.ID, "compat", 0); err == nil {
+		return true, "já preparado"
+	}
+	switch estado, _ := s.db.Processamento(ctx, arquivo.ID); estado {
+	case "pedido":
+		return true, "pedido ao worker"
+	case "concluido", "falhou":
+		// O worker não gerou versão para este cliente: o Mac faz.
+		return false, ""
+	}
+	if e := s.opts.Energia.Estado(ctx); e.Ruim() {
+		return true, "Mac " + e.Motivo
+	}
+	if s.preparador.Ocupado() {
+		return true, "fila local cheia"
+	}
+	return false, ""
 }
 
 // progressoNaNuvem traduz o estado do processamento no worker para o mesmo

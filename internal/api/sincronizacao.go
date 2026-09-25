@@ -7,11 +7,17 @@ import (
 
 	"nas/internal/cloud"
 	"nas/internal/db"
+	"nas/internal/energia"
 	"nas/internal/sincro"
 )
 
 func (s *Server) handleSincronizacao(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.sincro.Estado(r.Context()))
+	// A energia vai junto: é ela que explica por que um preparo foi para a
+	// nuvem (bursting) em vez de rodar aqui.
+	writeJSON(w, http.StatusOK, struct {
+		sincro.Estado
+		Energia energia.Estado `json:"energia"`
+	}{s.sincro.Estado(r.Context()), s.opts.Energia.Estado(r.Context())})
 }
 
 func (s *Server) handleReconciliar(w http.ResponseWriter, r *http.Request) {

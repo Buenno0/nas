@@ -357,6 +357,14 @@ function SincronizacaoCard() {
         </p>
       )}
 
+      {data?.energia && !nuvem.papel?.startsWith('nuvem') && (
+        <p className="mt-3 text-xs text-muted">
+          {data.energia.motivo
+            ? `Mac ${data.energia.motivo}${data.energia.carga ? ` (${data.energia.carga}%)` : ''}: preparos de arquivos que também estão no bucket vão para os workers da nuvem.`
+            : 'Mac na tomada e frio: preparos rodam aqui, com o VideoToolbox.'}
+        </p>
+      )}
+
       {data && data.tarefas.length > 0 && (
         <ul className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line">
           {data.tarefas.map((t) => {

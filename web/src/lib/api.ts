@@ -70,6 +70,8 @@ export interface EstadoSincronizacao {
   ultima_reconciliacao?: string
   reconciliando: boolean
   erro?: string
+  /** Bateria e temperatura do Mac: decidem o bursting para os workers. */
+  energia?: { na_bateria: boolean; carga?: number; quente: boolean; motivo?: string }
 }
 
 export interface TitleCard {
