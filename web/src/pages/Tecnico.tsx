@@ -506,7 +506,7 @@ function Custo({ c, doCache }: { c: CustoDaNuvem; doCache: boolean }) {
             </li>
           ))}
           <li className="text-muted">
-            Falta de permissão? Aplique o infra/identidade.tf (LerCustos, LerOrcamento). Conta nova: abra o Cost Explorer uma vez no console para ativá-lo.
+            Falta de permissão? Aplique o infra/identidade.tf (Mac) ou o infra/nuvem.tf (instância cloud): LerCustos e LerOrcamento. Conta nova: abra o Cost Explorer uma vez no console para ativá-lo.
           </li>
         </ul>
       )}

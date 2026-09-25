@@ -71,6 +71,19 @@ resource "aws_iam_role_policy" "nuvem" {
         Resource = "arn:aws:ecs:${var.regiao}:${data.aws_caller_identity.atual.account_id}:service/${aws_ecs_cluster.ozymandias.name}/ozymandias-worker"
       },
       {
+        # Painel de custo também na tela técnica da instância cloud.
+        Sid      = "LerCustos"
+        Effect   = "Allow"
+        Action   = ["ce:GetCostAndUsage"]
+        Resource = "*"
+      },
+      {
+        Sid      = "LerOrcamento"
+        Effect   = "Allow"
+        Action   = ["budgets:ViewBudget"]
+        Resource = aws_budgets_budget.mensal.arn
+      },
+      {
         # Canal do ECS Exec (o agente do SSM que o Fargate injeta).
         Sid      = "ECSExec"
         Effect   = "Allow"
