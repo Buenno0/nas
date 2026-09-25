@@ -156,6 +156,14 @@ resource "aws_ecs_task_definition" "nuvem" {
     cpu_architecture        = "ARM64"
   }
 
+  volume {
+    name = "tailscale"
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.tailscale[0].id
+      transit_encryption = "ENABLED"
+    }
+  }
+
   container_definitions = jsonencode([
     {
       name      = "ozymandias"
@@ -183,13 +191,16 @@ resource "aws_ecs_task_definition" "nuvem" {
       entryPoint = ["/bin/sh", "-c"]
       command    = ["printf '%s' \"$SERVE_JSON\" > /tmp/serve.json && exec /usr/local/bin/containerboot"]
       environment = [
-        { name = "TS_HOSTNAME", value = "ozymandias-nuvem" },
+        { name = "TS_HOSTNAME", value = var.nome_na_tailnet },
+        # No EFS: identidade e certificado sobrevivem à troca da task.
+        { name = "TS_STATE_DIR", value = "/var/lib/tailscale" },
         { name = "TS_USERSPACE", value = "true" }, # Fargate não tem /dev/net/tun
         { name = "TS_SERVE_CONFIG", value = "/tmp/serve.json" },
         { name = "TS_EXTRA_ARGS", value = "--advertise-tags=tag:ozymandias" },
         { name = "SERVE_JSON", value = local.serve_json },
       ]
       secrets          = [{ name = "TS_AUTHKEY", valueFrom = aws_ssm_parameter.tailscale[0].arn }]
+      mountPoints      = [{ sourceVolume = "tailscale", containerPath = "/var/lib/tailscale", readOnly = false }]
       logConfiguration = local.log
     },
   ])
@@ -216,6 +227,7 @@ resource "aws_ecs_service" "nuvem" {
   # ECS Exec: terminal no container pelo console (Connect) ou por
   # `aws ecs execute-command`. Sem SSH nem porta aberta; sessões no CloudTrail.
   enable_execute_command = true
+  depends_on             = [aws_efs_mount_target.tailscale]
   # Um só escritor no SQLite: nunca duas tasks ao mesmo tempo.
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100

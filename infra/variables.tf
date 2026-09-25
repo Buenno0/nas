@@ -66,3 +66,9 @@ variable "tmdb_key" {
   sensitive   = true
   default     = ""
 }
+
+variable "nome_na_tailnet" {
+  description = "Nome da instância cloud na tailnet: o endereço vira https://<nome>.<tailnet>.ts.net. Trocar de nome pede um certificado novo."
+  type        = string
+  default     = "ozymandias-nuvem"
+}
