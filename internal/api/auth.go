@@ -41,7 +41,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := auth.ClientIP(r, s.opts.TrustProxy)
+	ip := auth.ClientIP(r, s.proxy())
 	token, user, ttl, err := s.auth.Login(r.Context(), ip, req.Username, req.Password, r.UserAgent(), req.Remember)
 	if err != nil {
 		status := http.StatusUnauthorized

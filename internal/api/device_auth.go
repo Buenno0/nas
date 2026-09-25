@@ -85,7 +85,7 @@ func (s *Server) handleDeviceStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	ip := auth.ClientIP(r, s.opts.TrustProxy)
+	ip := auth.ClientIP(r, s.proxy())
 	s.devices.mu.Lock()
 	s.devices.cleanupLocked(now)
 	if !s.devices.allowStartLocked(ip, now) {

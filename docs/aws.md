@@ -170,24 +170,27 @@ sobe sozinho com a fila.
 
 ## 6. Instância cloud (opcional)
 
-Para o Ozymandias continuar no ar com o Mac dormindo:
+Para o Ozymandias continuar no ar com o Mac dormindo, em
+`https://ozymandias-nuvem.<sua-tailnet>.ts.net` (HTTPS de graça, sem domínio).
+Por padrão ela fica **na internet** pelo Tailscale Funnel: abre em qualquer
+navegador, sem app. A senha e o limite de tentativas de login continuam
+valendo.
 
-1. Conta gratuita no Tailscale; instale o app no Mac e no celular.
-2. Na ACL da tailnet, declare a tag:
+1. Conta gratuita no Tailscale (tailscale.com). O app só é preciso para a
+   variante privada (`funnel = false`).
+2. Em *Access controls*, no JSON da política, declare a tag e libere o Funnel
+   para ela:
 
    ```json
-   "tagOwners": { "tag:ozymandias": ["autogroup:admin"] }
+   "tagOwners": { "tag:ozymandias": ["autogroup:admin"] },
+   "nodeAttrs": [ { "target": ["tag:ozymandias"], "attr": ["funnel"] } ],
    ```
 
 3. *Settings* → *Keys* → *Generate auth key*: **reusable**, **ephemeral** e com a
    tag `tag:ozymandias`.
-4. Em `infra/terraform.tfvars`: `tailscale_authkey = "tskey-auth-…"`. Para uma TV
-   sem o app, `funnel = true` (fica público na internet; a senha continua
-   valendo).
-5. `tofu apply` de novo. Em alguns minutos ela responde em
-   `https://ozymandias-nuvem.<sua-tailnet>.ts.net`.
-
----
+4. Em `infra/terraform.tfvars`: `tailscale_authkey = "tskey-auth-…"`. Para
+   deixar só na sua tailnet (cada aparelho com o app): `funnel = false`.
+5. `tofu apply` de novo. Em alguns minutos ela responde no endereço acima.
 
 ## Custos e como desligar
 

@@ -55,7 +55,7 @@ variable "tailscale_authkey" {
 }
 
 variable "funnel" {
-  description = "Expor a instância cloud publicamente pelo Tailscale Funnel (para TV sem o app). Sem ele, só a sua tailnet acessa."
+  description = "Expor a instância cloud na internet pelo Tailscale Funnel: abre em qualquer navegador, sem o app. A senha e o limite de tentativas continuam valendo. false = só a sua tailnet acessa."
   type        = bool
-  default     = false
+  default     = true
 }

@@ -74,6 +74,18 @@ type Server struct {
 	startedAt   time.Time
 }
 
+// proxy diz em que cabeçalho confiar para o IP do cliente.
+func (s *Server) proxy() auth.Proxy {
+	switch {
+	case !s.opts.TrustProxy:
+		return auth.SemProxy
+	case s.opts.NaNuvem:
+		return auth.Tailscale
+	default:
+		return auth.Cloudflare
+	}
+}
+
 // ffmpegAvailable diz à interface se dá para gerar capas e miniaturas.
 func (s *Server) ffmpegAvailable() bool {
 	_, err := media.FFmpegPath()

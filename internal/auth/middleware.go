@@ -123,21 +123,40 @@ func unauthorized(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"error": "não autenticado"})
 }
 
-// ClientIP resolve o IP para o rate limit. Atrás do tunnel, toda requisição
-// chega do loopback (o cloudflared roda na própria máquina), então nesse caso
-// — e só nesse — o cabeçalho da Cloudflare é a fonte confiável.
-func ClientIP(r *http.Request, trustProxy bool) string {
+// Proxy diz quem está no loopback na frente do servidor, e portanto em que
+// cabeçalho confiar para o IP do cliente (rate limit do login).
+type Proxy int
+
+const (
+	SemProxy   Proxy = iota // conexão direta: vale o RemoteAddr
+	Cloudflare              // tunnel: o cloudflared põe CF-Connecting-IP
+	Tailscale               // instância cloud: o tailscale serve (e o Funnel)
+)
+
+// ClientIP resolve o IP para o rate limit. Só um proxy no loopback é
+// confiável, e só o que ELE escreve: o cliente pode mandar qualquer
+// cabeçalho. A Cloudflare sobrescreve o CF-Connecting-IP; o tailscale serve
+// acrescenta o IP real no FIM do X-Forwarded-For, então é o último item que
+// vale — o primeiro pode ter vindo do próprio atacante.
+func ClientIP(r *http.Request, proxy Proxy) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	if trustProxy && isLoopback(host) {
-		if cf := r.Header.Get("CF-Connecting-IP"); cf != "" {
+	if !isLoopback(host) {
+		return host
+	}
+	switch proxy {
+	case Cloudflare:
+		if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
 			return cf
 		}
-		// Na instância cloud o proxy do loopback é o tailscale serve.
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			return strings.TrimSpace(strings.Split(xff, ",")[0])
+	case Tailscale:
+		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+			itens := strings.Split(xff[len(xff)-1], ",")
+			if ip := strings.TrimSpace(itens[len(itens)-1]); ip != "" {
+				return ip
+			}
 		}
 	}
 	return host
