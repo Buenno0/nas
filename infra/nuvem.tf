@@ -63,6 +63,13 @@ resource "aws_iam_role_policy" "nuvem" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      {
+        # Canal do ECS Exec (o agente do SSM que o Fargate injeta).
+        Sid      = "ECSExec"
+        Effect   = "Allow"
+        Action   = ["ssmmessages:CreateControlChannel", "ssmmessages:CreateDataChannel", "ssmmessages:OpenControlChannel", "ssmmessages:OpenDataChannel"]
+        Resource = "*"
+      },
       { Effect = "Allow", Action = ["s3:ListBucket", "s3:ListBucketMultipartUploads"], Resource = aws_s3_bucket.midia.arn },
       {
         # Uploads com o Mac dormindo e leitura do acervo.
@@ -206,6 +213,9 @@ resource "aws_ecs_service" "nuvem" {
   cluster         = aws_ecs_cluster.ozymandias.id
   task_definition = aws_ecs_task_definition.nuvem[0].arn
   desired_count   = 1
+  # ECS Exec: terminal no container pelo console (Connect) ou por
+  # `aws ecs execute-command`. Sem SSH nem porta aberta; sessões no CloudTrail.
+  enable_execute_command = true
   # Um só escritor no SQLite: nunca duas tasks ao mesmo tempo.
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
