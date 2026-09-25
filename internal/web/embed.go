@@ -45,9 +45,12 @@ func IsSPARoute(path string) bool {
 	return false
 }
 
-// ErrorPage devolve a tela de erro embutida (401, 404 ou 500).
-func ErrorPage(code int) ([]byte, bool) {
-	data, err := embedded.ReadFile(fmt.Sprintf("dist/telas-erro/%d.html", code))
+// ErrorPage devolve a tela de erro embutida (401, 404, 500, 502 ou 503).
+func ErrorPage(code int) ([]byte, bool) { return pagina(fmt.Sprint(code)) }
+
+// pagina lê uma tela pelo nome: "404", "503-no-mac".
+func pagina(nome string) ([]byte, bool) {
+	data, err := embedded.ReadFile("dist/telas-erro/" + nome + ".html")
 	if err != nil {
 		return nil, false
 	}
@@ -57,8 +60,8 @@ func ErrorPage(code int) ([]byte, bool) {
 // errorPageGzip devolve a variante comprimida da tela de erro, se existir.
 // São 15 KB de HTML animado que caem para 4,5 KB — vale mesmo em página que
 // aparece pouco, porque quem cai no 401 pelo tunnel costuma estar no celular.
-func errorPageGzip(code int) ([]byte, bool) {
-	data, err := embedded.ReadFile(fmt.Sprintf("dist/telas-erro/%d.html.gz", code))
+func errorPageGzip(nome string) ([]byte, bool) {
+	data, err := embedded.ReadFile("dist/telas-erro/" + nome + ".html.gz")
 	if err != nil {
 		return nil, false
 	}
@@ -172,8 +175,22 @@ func Handler() http.Handler {
 // resposta vazia.
 func ServeError(w http.ResponseWriter, r *http.Request, code int) { serveError(w, r, code) }
 
+// ServeTela é o ServeError para telas com nome próprio: duas telas podem
+// compartilhar o código (503 do modo local e 503 do "no Mac").
+func ServeTela(w http.ResponseWriter, r *http.Request, nome string, code int) {
+	servePagina(w, r, nome, code)
+}
+
+// QuerTela diz se quem pediu é um navegador abrindo a URL, e não o SPA (que
+// pede com Accept: */* e espera JSON).
+func QuerTela(r *http.Request) bool { return strings.Contains(r.Header.Get("Accept"), "text/html") }
+
 func serveError(w http.ResponseWriter, r *http.Request, code int) {
-	page, ok := ErrorPage(code)
+	servePagina(w, r, fmt.Sprint(code), code)
+}
+
+func servePagina(w http.ResponseWriter, r *http.Request, nome string, code int) {
+	page, ok := pagina(nome)
 	if !ok {
 		http.Error(w, http.StatusText(code), code)
 		return
@@ -186,7 +203,7 @@ func serveError(w http.ResponseWriter, r *http.Request, code int) {
 	// O status vem antes do corpo, comprimido ou não: a tela de 404 tem de
 	// chegar COM 404, que é o ponto das ruínas.
 	if r != nil && aceitaGzip(r) {
-		if gz, ok := errorPageGzip(code); ok {
+		if gz, ok := errorPageGzip(nome); ok {
 			w.Header().Set("Content-Encoding", "gzip")
 			w.Header().Set("Content-Length", fmt.Sprint(len(gz)))
 			w.WriteHeader(code)

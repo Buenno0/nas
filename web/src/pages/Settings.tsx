@@ -4,7 +4,8 @@ import { api } from '../lib/api'
 import { useScanStatus } from '../lib/useScanStatus'
 import { useTheme } from '../lib/theme'
 import { kindLabel } from '../lib/format'
-import { CloudIcon, CloudOffIcon, MoonIcon, RefreshIcon, SunIcon, UploadIcon } from '../components/icons'
+import { CloudIcon, LuaSpinner, MoonIcon, NuvemIcon, RefreshIcon, SunIcon, UploadIcon, type EstadoNuvem } from '../components/icons'
+import { NuvemDeEnvio } from '../components/NuvemDeEnvio'
 import { chaveModo, useModoNuvem } from '../lib/nuvem'
 import { criarEnvio, enviar, PausadoPeloModo } from '../lib/upload'
 import { humanSize } from '../lib/format'
@@ -70,13 +71,43 @@ function InstanciaCloudCard() {
   )
 }
 
+const ESTRATO = 'M0 40 C60 18 140 22 210 30 C260 10 330 12 382 30 C432 24 472 34 500 44 C420 54 300 52 200 54 C120 56 50 52 0 40 Z'
+
+/** O corte, dito com a cena: os dois bancos de nuvem se abrem e o céu fica
+ *  limpo. Dura o tempo de ler a frase; o estado real já é o selo. */
+function NuvemCortada() {
+  return (
+    <div role="status" className="relative mt-4 overflow-hidden rounded-lg border border-line bg-bg px-4 py-3">
+      <svg viewBox="0 0 600 70" className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <g className="nv-dispersa-e">
+          <path d={ESTRATO} transform="translate(-20 4) scale(0.9)" className="fill-elev" />
+        </g>
+        <g className="nv-dispersa-d">
+          <path d={ESTRATO} transform="translate(240 10) scale(0.8)" className="fill-elev" />
+        </g>
+      </svg>
+      <p className="relative text-sm font-semibold text-ok">A nuvem foi cortada</p>
+      <p className="relative text-xs text-muted">Nenhuma chamada sai do Mac. Envios e downloads continuam quando o híbrido voltar.</p>
+    </div>
+  )
+}
+
 function NuvemCard() {
   const queryClient = useQueryClient()
   const estado = useModoNuvem()
+  const [cortou, setCortou] = useState(0)
   const alternar = useMutation({
     mutationFn: api.setModo,
+    onSuccess: (_, modo) => {
+      if (modo === 'local') setCortou(Date.now())
+    },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: chaveModo }),
   })
+  useEffect(() => {
+    if (!cortou) return
+    const t = window.setTimeout(() => setCortou(0), 3500)
+    return () => window.clearTimeout(t)
+  }, [cortou])
 
   const modo = estado?.modo ?? 'local'
   const hibrido = modo === 'hibrido'
@@ -100,7 +131,7 @@ function NuvemCard() {
             hibrido ? 'bg-accent/15 text-accent' : 'bg-elev text-ink',
           ].join(' ')}
         >
-          {hibrido ? <CloudIcon /> : <CloudOffIcon />}
+          <NuvemIcon key={modo} estado={modo === 'conectando' ? 'conectando' : hibrido ? 'hibrido' : 'local'} />
           {modo === 'conectando' ? 'Conectando…' : hibrido ? 'Híbrido' : 'Local'}
         </span>
 
@@ -124,6 +155,7 @@ function NuvemCard() {
         )}
       </div>
 
+      {cortou > 0 && <NuvemCortada key={cortou} />}
       {bloqueio && !hibrido && <p className="mt-3 text-xs text-muted">{bloqueio}</p>}
       {estado?.erro && (
         <p role="alert" className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
@@ -145,6 +177,22 @@ interface Envio {
   enviados: number
   estado: 'enviando' | 'pausado' | 'pronto' | 'erro'
   erro?: string
+}
+
+/** O lote inteiro numa nuvem só: o progresso somado dos envios que não
+ *  falharam. O raio cai quando o último termina. */
+function LoteDeEnvio({ envios }: { envios: Envio[] }) {
+  const lote = envios.filter((e) => e.estado !== 'erro')
+  const total = lote.reduce((n, e) => n + e.arquivo.size, 0)
+  const feito = lote.reduce((n, e) => n + (e.estado === 'pronto' ? e.arquivo.size : e.enviados), 0)
+  const ativo = lote.some((e) => e.estado === 'enviando')
+  const progresso = total > 0 ? feito / total : 0
+  if (lote.length === 0) return null
+  return (
+    <div className="mt-4 flex justify-center">
+      <NuvemDeEnvio progresso={progresso} ativo={ativo} />
+    </div>
+  )
 }
 
 function UploadCard() {
@@ -263,6 +311,8 @@ function UploadCard() {
         />
       </label>
 
+      {envios.length > 0 && <LoteDeEnvio envios={envios} />}
+
       {envios.length > 0 && (
         <ul className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line">
           {envios.map((e) => {
@@ -270,7 +320,14 @@ function UploadCard() {
             return (
               <li key={e.chave} className="px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="line-clamp-1 font-medium">{e.arquivo.name}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <NuvemIcon
+                      key={e.estado}
+                      estado={e.estado === 'pronto' ? 'concluido' : e.estado === 'erro' ? 'erro' : e.estado === 'pausado' ? 'local' : 'enviando'}
+                      className={e.estado === 'erro' ? 'shrink-0 text-danger' : e.estado === 'pronto' ? 'shrink-0 text-ok' : 'shrink-0 text-accent'}
+                    />
+                    <span className="line-clamp-1 font-medium">{e.arquivo.name}</span>
+                  </span>
                   <span
                     className={[
                       'shrink-0 text-xs',
@@ -306,6 +363,13 @@ function UploadCard() {
   )
 }
 
+function iconeDaTarefa(tipo: string, estado: string): EstadoNuvem {
+  if (estado === 'erro') return 'erro'
+  if (estado === 'pausado') return 'local'
+  if (estado === 'fila') return 'processando'
+  return tipo === 'fixar' ? 'baixando' : tipo === 'enviar' ? 'enviando' : 'sincronizando'
+}
+
 const rotuloDaTarefa = { enviar: 'enviando', fixar: 'baixando', liberar: 'liberando', remover: 'removendo' }
 
 function SincronizacaoCard() {
@@ -338,7 +402,7 @@ function SincronizacaoCard() {
           disabled={!hibrido || data?.reconciliando || reconciliar.isPending}
           className="inline-flex items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium transition hover:bg-elev disabled:opacity-50"
         >
-          <RefreshIcon className={data?.reconciliando ? 'animate-spin' : undefined} />
+          {data?.reconciliando ? <LuaSpinner className="text-ink" /> : <RefreshIcon />}
           {data?.reconciliando ? 'Sincronizando…' : 'Sincronizar agora'}
         </button>
         <p className="text-xs text-muted">
@@ -372,7 +436,10 @@ function SincronizacaoCard() {
             return (
               <li key={`${t.tipo}-${t.file_id}`} className="px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="line-clamp-1 font-medium">{t.nome}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <NuvemIcon key={t.estado} estado={iconeDaTarefa(t.tipo, t.estado)} className={t.estado === 'erro' ? 'shrink-0 text-danger' : 'shrink-0 text-accent'} />
+                    <span className="line-clamp-1 font-medium">{t.nome}</span>
+                  </span>
                   <span className={`shrink-0 text-xs ${t.estado === 'erro' ? 'text-danger' : 'text-muted'}`}>
                     {t.estado === 'erro'
                       ? 'falhou'

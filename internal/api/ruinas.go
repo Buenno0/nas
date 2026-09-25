@@ -8,8 +8,8 @@ import (
 	"nas/internal/web"
 )
 
-// As ruínas: rotas que devolvem erro de propósito, para as telas de 401, 404 e
-// 500 poderem ser vistas sem quebrar nada de verdade. São públicas — a graça é
+// As ruínas: rotas que devolvem erro de propósito, para as telas de 401, 404,
+// 500 e as da nuvem (502, 503) poderem ser vistas sem quebrar nada de verdade. São públicas — a graça é
 // justamente mandar o link para alguém.
 //
 // O contador é de memória, some quando o servidor reinicia, e não guarda nada
@@ -19,9 +19,15 @@ type ruinas struct {
 	visits map[int]int
 }
 
-var codigosPermitidos = map[int]bool{401: true, 404: true, 500: true}
+var codigosPermitidos = map[int]bool{401: true, 404: true, 500: true, 502: true, 503: true}
 
 func (s *Server) handleRuina(w http.ResponseWriter, r *http.Request) {
+	// A tela da instância cloud divide o 503 com a do modo local.
+	if r.PathValue("codigo") == "no-mac" {
+		s.registraRuina(503)
+		web.ServeTela(w, r, "503-no-mac", http.StatusServiceUnavailable)
+		return
+	}
 	code, err := strconv.Atoi(r.PathValue("codigo"))
 	if err != nil || !codigosPermitidos[code] {
 		// Pedir uma ruína que não existe é, ele mesmo, um 404.

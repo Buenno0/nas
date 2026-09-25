@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, downloadUrl, soNaNuvem, type AcaoDeNuvem, type FileInfo, type TitleDetail } from '../lib/api'
 import { useDisponibilidade, useHibrido, useModoNuvem } from '../lib/nuvem'
 import { clockTime, gradientFor, humanDuration, humanSize, kindLabel } from '../lib/format'
-import { CloudOffIcon, DownloadIcon, HeartIcon, PauseIcon, PlayIcon } from '../components/icons'
+import { CloudOffIcon, DownloadIcon, HeartIcon, NuvemIcon, PauseIcon, PlayIcon } from '../components/icons'
 import { ErrorState, Spinner } from '../components/states'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { ColecaoPicker } from '../components/ColecaoPicker'
@@ -517,7 +517,14 @@ function AcoesDeNuvem({ file }: { file: FileInfo }) {
         : loc === 'baixando'
           ? 'baixando…'
           : ''
-    return texto ? <span className="shrink-0 text-xs text-muted">{texto}</span> : null
+    if (!texto) return null
+    const icone = loc === 'enviando' ? 'enviando' : loc === 'baixando' ? 'baixando' : 'processando'
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
+        <NuvemIcon estado={icone} className="text-accent" />
+        {texto}
+      </span>
+    )
   }
 
   return (

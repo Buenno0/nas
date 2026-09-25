@@ -11,6 +11,7 @@ import (
 	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/media"
+	"nas/internal/web"
 )
 
 // Tipos MIME que o Go não conhece ou erra, e que o <video> precisa acertar.
@@ -58,6 +59,10 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.opts.NaNuvem {
+		if web.QuerTela(r) {
+			web.ServeTela(w, r, "503-no-mac", http.StatusServiceUnavailable)
+			return
+		}
 		writeError(w, http.StatusServiceUnavailable, "no Mac, indisponível na nuvem")
 		return
 	}
@@ -94,6 +99,10 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 func (s *Server) streamDaNuvem(w http.ResponseWriter, r *http.Request, file db.MediaFile) {
 	arm, _, ok := s.nuvem.Hibrido()
 	if !ok {
+		if web.QuerTela(r) {
+			web.ServeTela(w, r, "503", http.StatusServiceUnavailable)
+			return
+		}
 		writeError(w, http.StatusServiceUnavailable, "na nuvem, indisponível no modo local")
 		return
 	}
@@ -108,6 +117,10 @@ func (s *Server) streamDaNuvem(w http.ResponseWriter, r *http.Request, file db.M
 	}
 	url, err := arm.URLDeLeitura(r.Context(), key, ttlDeLeitura)
 	if err != nil {
+		if web.QuerTela(r) {
+			web.ServeTela(w, r, "502", http.StatusBadGateway)
+			return
+		}
 		writeError(w, http.StatusBadGateway, "não foi possível assinar a leitura: "+err.Error())
 		return
 	}

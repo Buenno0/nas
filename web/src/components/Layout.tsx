@@ -9,8 +9,7 @@ import { Mark } from './Mark'
 import {
   ActivityIcon,
   ChevronRight,
-  CloudIcon,
-  CloudOffIcon,
+  NuvemIcon,
   FilmIcon,
   HomeIcon,
   ListIcon,
@@ -79,7 +78,7 @@ function SeloDoModo() {
         estado.modo === 'conectando' ? 'animate-pulse' : '',
       ].join(' ')}
     >
-      {hibrido ? <CloudIcon /> : <CloudOffIcon />}
+      <NuvemIcon key={estado.modo} estado={naNuvem || hibrido ? 'hibrido' : estado.modo === 'conectando' ? 'conectando' : 'local'} />
       {rotulo}
     </Link>
   )
@@ -217,6 +216,27 @@ function RuinasMenu() {
             >
               <span className="font-mono font-semibold text-danger">500</span>
               <span>Colapso final</span>
+            </a>
+            <a
+              href="/ruinas/502"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
+            >
+              <span className="font-mono font-semibold text-danger">502</span>
+              <span>Névoa no horizonte</span>
+            </a>
+            <a
+              href="/ruinas/503"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
+            >
+              <span className="font-mono font-semibold text-ink">503</span>
+              <span>O céu está fechado</span>
+            </a>
+            <a
+              href="/ruinas/no-mac"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface hover:text-ink"
+            >
+              <span className="font-mono font-semibold text-accent">503</span>
+              <span>Isto dorme no Mac</span>
             </a>
           </div>
         </nav>

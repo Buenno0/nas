@@ -1,5 +1,5 @@
 // Ícones inline: nenhuma dependência extra e todos herdam currentColor.
-import type { SVGProps } from 'react'
+import { useId, type SVGProps } from 'react'
 
 type IconProps = SVGProps<SVGSVGElement>
 
@@ -228,3 +228,124 @@ export const UploadIcon = (p: IconProps) => (
     <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
   </Icon>
 )
+
+/** Os estados de nuvem, um desenho e uma animação cada (canvas "Céu fechado"). */
+export type EstadoNuvem =
+  | 'hibrido'
+  | 'local'
+  | 'conectando'
+  | 'enviando'
+  | 'baixando'
+  | 'sincronizando'
+  | 'concluido'
+  | 'erro'
+  | 'processando'
+  | 'no-mac'
+
+const CONTORNO = 'M7 18h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.5 9.2 4.5 4.5 0 0 0 7 18Z'
+
+/** Nuvem animada. `estado` escolhe o desenho; a cor vem de currentColor,
+ *  então quem usa decide o tom (ouro para ação, osso para espera…). */
+export function NuvemIcon({ estado, ...p }: IconProps & { estado: EstadoNuvem }) {
+  switch (estado) {
+    case 'hibrido':
+      return (
+        <Icon {...p} style={{ overflow: 'visible', ...p.style }}>
+          <path className="nv-flutua" d={CONTORNO} />
+        </Icon>
+      )
+    case 'local':
+      return (
+        <Icon {...p}>
+          <path className="nv-esmaece" d="M9 5.6A6 6 0 0 1 18.1 10a4 4 0 0 1 2.4 6.6M17 18H7a4.5 4.5 0 0 1-.9-8.9" />
+          <path className="nv-corta" d="M3 3l18 18" />
+        </Icon>
+      )
+    case 'conectando':
+      return (
+        <Icon {...p}>
+          <path d={CONTORNO} strokeOpacity={0.3} />
+          <path className="nv-contorno" d={CONTORNO} />
+        </Icon>
+      )
+    case 'enviando':
+      return (
+        <Icon {...p}>
+          <path d={CONTORNO} strokeOpacity={0.45} />
+          <g className="nv-sobe">
+            <path d="M12 16v-6M9.5 12.5 12 10l2.5 2.5" />
+          </g>
+        </Icon>
+      )
+    case 'baixando':
+      return (
+        <Icon {...p}>
+          <path d={CONTORNO} strokeOpacity={0.45} />
+          <g className="nv-desce">
+            <path d="M12 10v6M9.5 13.5 12 16l2.5-2.5" />
+          </g>
+        </Icon>
+      )
+    case 'sincronizando':
+      return (
+        <Icon {...p}>
+          <path d={CONTORNO} />
+          <g className="nv-gira">
+            <path d="M9.6 12.6a2.5 2.5 0 0 1 4.3-1.7M14.4 13.4a2.5 2.5 0 0 1-4.3 1.7" />
+          </g>
+        </Icon>
+      )
+    case 'concluido':
+      return (
+        <Icon {...p}>
+          <path d={CONTORNO} />
+          <path className="nv-marca" d="M9.3 13.3 11.2 15.2 14.8 11.4" />
+        </Icon>
+      )
+    case 'erro':
+      return (
+        <Icon {...p}>
+          <g className="nv-treme">
+            <path d={CONTORNO} />
+            <path className="nv-alerta" d="M12 10.5v2.6M12 15.4v.1" />
+          </g>
+        </Icon>
+      )
+    case 'processando':
+      return (
+        <Icon {...p}>
+          <path d={CONTORNO} />
+          {[9.5, 12, 14.5].map((cx, i) => (
+            <circle key={cx} className="nv-ponto" cx={cx} cy={13.5} r={0.6} fill="currentColor" style={{ animationDelay: `${i * 0.2}s` }} />
+          ))}
+        </Icon>
+      )
+    case 'no-mac':
+      return (
+        <Icon {...p}>
+          <path d="M4 15.5h16M6 15.5V7.5a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 18 7.5v8M3 18h18" />
+          <path className="nv-dorme" d="M10.6 9.2a2.2 2.2 0 1 0 2.8 2.8 1.8 1.8 0 0 1-2.8-2.8Z" />
+        </Icon>
+      )
+  }
+}
+
+/** A lua no lugar do spinner: troca de fase em 3,2 s. */
+export function LuaSpinner(p: IconProps) {
+  // Uma máscara por instância: dois spinners na tela não podem dividir o id.
+  const id = useId()
+  return (
+    <svg viewBox="0 0 120 120" width="1.25em" height="1.25em" aria-hidden="true" {...p}>
+      <defs>
+        <mask id={id}>
+          <rect width="120" height="120" fill="#000" />
+          <circle cx="60" cy="60" r="27" fill="#fff" />
+          <rect x="60" y="0" width="60" height="120" fill="#000" />
+          <ellipse className="nv-fase" cx="60" cy="60" rx="12" ry="27" fill="#fff" />
+        </mask>
+      </defs>
+      <circle cx="60" cy="60" r="27" fill="currentColor" opacity={0.18} />
+      <circle cx="60" cy="60" r="27" fill="currentColor" mask={`url(#${id})`} />
+    </svg>
+  )
+}

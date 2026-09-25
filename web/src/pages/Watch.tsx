@@ -16,6 +16,7 @@ import {
   FullscreenIcon,
   PauseIcon,
   PipIcon,
+  NuvemIcon,
   PlayIcon,
   VolumeIcon,
   WarningIcon,
@@ -765,6 +766,7 @@ function PainelDePreparo({
           </>
         ) : (
           <>
+            {naNuvem && <NuvemIcon estado="processando" className="mx-auto mb-3 text-accent" width="2em" height="2em" />}
             <h2 className="text-base font-semibold text-white">{titulo}</h2>
             <p className="mt-1 text-sm text-white/60">{plano.motivo}</p>
 
