@@ -41,7 +41,10 @@ resource "aws_s3_bucket_cors_configuration" "midia" {
   bucket = aws_s3_bucket.midia.id
   cors_rule {
     allowed_methods = ["PUT", "GET", "HEAD"]
-    allowed_origins = var.origens_web
+    # Navegadores mandam o Origin com o host em minúsculas, e o S3 compara
+    # diferenciando maiúsculas: "MacBook-Air.local" no tfvars recusava o
+    # Safari com 403. As duas formas entram, mais qualquer Mac da rede local.
+    allowed_origins = distinct(concat(var.origens_web, [for o in var.origens_web : lower(o)], ["http://*.local:8787"]))
     allowed_headers = ["*"]
     expose_headers  = ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"]
     max_age_seconds = 3600
