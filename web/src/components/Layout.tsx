@@ -5,6 +5,7 @@ import { api, type Library } from '../lib/api'
 import { useTheme } from '../lib/theme'
 import { useModoAoVivo, useModoNuvem } from '../lib/nuvem'
 import { MiniPlayer } from './MiniPlayer'
+import { CartaoDeEnvios } from './CartaoDeEnvios'
 import { Mark } from './Mark'
 import {
   ActivityIcon,
@@ -55,6 +56,8 @@ export function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <MiniPlayer />
+      {/* Em Configurações o cartão completo já está na página. */}
+      {location.pathname !== '/settings' && <CartaoDeEnvios />}
       <MobileNav libraries={libraries ?? []} />
     </div>
   )

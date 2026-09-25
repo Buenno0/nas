@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useScanStatus } from '../lib/useScanStatus'
@@ -7,7 +7,8 @@ import { kindLabel } from '../lib/format'
 import { CloudIcon, LuaSpinner, MoonIcon, NuvemIcon, RefreshIcon, SunIcon, UploadIcon, type EstadoNuvem } from '../components/icons'
 import { NuvemDeEnvio } from '../components/NuvemDeEnvio'
 import { chaveModo, useModoNuvem } from '../lib/nuvem'
-import { criarEnvio, enviar, PausadoPeloModo } from '../lib/upload'
+import { mbps, useEnvios } from '../lib/envios'
+import { ListaDeEnvios } from '../components/ListaDeEnvios'
 import { humanSize } from '../lib/format'
 
 export function Settings() {
@@ -170,250 +171,15 @@ function NuvemCard() {
   )
 }
 
-interface Envio {
-  chave: string
-  arquivo: File
-  uploadId?: number
-  enviados: number
-  estado: 'enviando' | 'pausado' | 'pronto' | 'erro'
-  erro?: string
-  /** Envios soltos juntos (ou enquanto outros ainda sobem) formam um lote:
-   *  é a unidade da nuvem que cresce e do raio no fim. */
-  lote: number
-}
-
-/** Um envio na lista, venha do navegador (upload direto) ou do Mac (o motor
- *  subindo um arquivo do disco, pedido na página do título). */
-interface Linha {
-  chave: string
-  nome: string
-  total: number
-  feitos: number
-  estado: Envio['estado']
-  erro?: string
-  lote: number
-  doMac: boolean
-  tentar?: () => void
-}
-
-/** "~3 min", "menos de 1 min", "~1 h 20 min". */
-function restante(segundos: number): string {
-  if (!isFinite(segundos) || segundos <= 0) return ''
-  if (segundos < 60) return 'menos de 1 min'
-  const min = Math.round(segundos / 60)
-  if (min < 60) return `~${min} min`
-  return `~${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''}`
-}
-
-const mbps = (bps: number) => `${Math.max(1, Math.round((bps * 8) / 1e6))} Mbps`
-
-/**
- * Velocidade de cada envio em bytes/s, suavizada (média móvel exponencial):
- * as partes chegam aos saltos de 16 MiB, e a velocidade crua faria a
- * previsão pular de "1 min" para "9 min" a cada parte. As primeiras leituras
- * esperam 3 s de amostra antes de prever qualquer coisa.
- */
-function useVelocidades(linhas: Linha[]): Map<string, number> {
-  const amostras = useRef(new Map<string, { t: number; feitos: number; inicio: number; bps: number }>())
-  const agora = performance.now()
-  const vel = new Map<string, number>()
-  for (const l of linhas) {
-    if (l.estado !== 'enviando') {
-      amostras.current.delete(l.chave)
-      continue
-    }
-    const a = amostras.current.get(l.chave)
-    if (!a) {
-      amostras.current.set(l.chave, { t: agora, feitos: l.feitos, inicio: agora, bps: 0 })
-      continue
-    }
-    const dt = (agora - a.t) / 1000
-    if (l.feitos > a.feitos && dt > 0.25) {
-      const inst = (l.feitos - a.feitos) / dt
-      a.bps = a.bps ? a.bps * 0.7 + inst * 0.3 : inst
-      a.t = agora
-      a.feitos = l.feitos
-    }
-    if (a.bps > 0 && agora - a.inicio > 3000) vel.set(l.chave, a.bps)
-  }
-  return vel
-}
-
-/** O lote mais recente numa nuvem só: o progresso somado das linhas dele que
- *  não falharam. O raio cai quando a última termina. */
-function LoteDeEnvio({ linhas, velocidades }: { linhas: Linha[]; velocidades: Map<string, number> }) {
-  const ultimo = linhas.reduce((n, e) => Math.max(n, e.lote), 0)
-  const lote = linhas.filter((e) => e.lote === ultimo && e.estado !== 'erro')
-  const total = lote.reduce((n, e) => n + e.total, 0)
-  const feito = lote.reduce((n, e) => n + (e.estado === 'pronto' ? e.total : e.feitos), 0)
-  const ativo = lote.some((e) => e.estado === 'enviando')
-  const progresso = total > 0 ? feito / total : 0
-  // Previsão do lote: o que falta sobre a soma das velocidades dos envios
-  // em curso (eles sobem em paralelo e dividem o link).
-  const bps = lote.reduce((n, e) => n + (velocidades.get(e.chave) ?? 0), 0)
-  const falta = restante(bps > 0 ? (total - feito) / bps : 0)
-  if (lote.length === 0) return null
-  return (
-    <div className="mt-4 flex flex-col items-center gap-1">
-      <NuvemDeEnvio progresso={progresso} ativo={ativo} />
-      <p className="font-mono text-xs text-muted" aria-live="polite">
-        {!ativo
-          ? progresso >= 1
-            ? 'tudo na nuvem'
-            : ''
-          : `${Math.round(progresso * 100)}% de ${humanSize(total)}${falta ? ` · faltam ${falta} · ${mbps(bps)}` : ' · calculando…'}`}
-      </p>
-    </div>
-  )
-}
-
-interface EnvioDoMac {
-  nome: string
-  total: number
-  feitos: number
-  estado: Envio['estado']
-  erro?: string
-  lote: number
-}
-
 function UploadCard() {
-  const queryClient = useQueryClient()
   const { data: libraries } = useQuery({ queryKey: ['libraries'], queryFn: api.libraries })
-  const estado = useModoNuvem()
-  const hibrido = estado?.modo === 'hibrido'
+  const hibrido = useModoNuvem()?.modo === 'hibrido'
   const [libId, setLibId] = useState(0)
-  const [envios, setEnvios] = useState<Envio[]>([])
   const [arrastando, setArrastando] = useState(false)
-  const [doMac, setDoMac] = useState<Record<number, EnvioDoMac>>({})
-
-  // Envios que o motor faz a partir do disco ("Enviar à nuvem" no título). A
-  // mesma consulta do painel de sincronização; rápida só enquanto há envio.
-  const { data: sinc } = useQuery({
-    queryKey: ['sincronizacao'],
-    queryFn: api.sincronizacao,
-    enabled: hibrido,
-    refetchInterval: (q) => (q.state.data?.tarefas.some((t) => t.tipo === 'enviar' && t.estado !== 'erro') ? 1000 : 5000),
-  })
-
-  // O uploader consulta isto a cada 200 ms: o kill switch chega pelo SSE e
-  // aborta as partes em voo.
-  const hibridoRef = useRef(hibrido)
-  hibridoRef.current = hibrido
-
+  // O estado dos envios mora acima das rotas (lib/envios): sair desta tela
+  // no meio de um envio não perde nada, e o cartão flutuante mostra o mesmo.
+  const { linhas, velocidades, lote, adiciona } = useEnvios()
   const destino = libId || libraries?.[0]?.id || 0
-  const muda = (chave: string, patch: Partial<Envio>) =>
-    setEnvios((lista) => lista.map((e) => (e.chave === chave ? { ...e, ...patch } : e)))
-
-  const roda = async (envio: Envio) => {
-    muda(envio.chave, { estado: 'enviando', erro: undefined })
-    try {
-      let uploadId = envio.uploadId
-      let upload
-      if (uploadId === undefined) {
-        upload = await criarEnvio(envio.arquivo, destino)
-        uploadId = upload.id
-        muda(envio.chave, { uploadId })
-      } else {
-        upload = (await api.partesDoUpload(uploadId)).upload
-      }
-      await enviar(envio.arquivo, upload, () => hibridoRef.current, (p) =>
-        muda(envio.chave, { enviados: p.enviados }),
-      )
-      muda(envio.chave, { estado: 'pronto', enviados: envio.arquivo.size })
-      void queryClient.invalidateQueries()
-    } catch (e) {
-      if (e instanceof PausadoPeloModo || !hibridoRef.current) muda(envio.chave, { estado: 'pausado' })
-      else muda(envio.chave, { estado: 'erro', erro: (e as Error).message })
-    }
-  }
-
-  // Voltou o híbrido: retoma o que o kill switch pausou.
-  const enviosRef = useRef(envios)
-  enviosRef.current = envios
-  useEffect(() => {
-    if (!hibrido) return
-    for (const e of enviosRef.current) if (e.estado === 'pausado') void roda(e)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hibrido])
-
-  // Nada subindo = lote novo; com algo em curso, os novos entram no mesmo.
-  // Vale para os dois lados: um envio do Mac no meio de um do navegador vai
-  // para a mesma nuvem.
-  const doMacRef = useRef(doMac)
-  doMacRef.current = doMac
-  const proximoLote = () => {
-    const todos = [...enviosRef.current, ...Object.values(doMacRef.current)]
-    const ultimo = todos.reduce((n, e) => Math.max(n, e.lote), 0)
-    const emCurso = todos.some((e) => e.estado === 'enviando' || e.estado === 'pausado')
-    return emCurso ? ultimo : ultimo + 1
-  }
-
-  useEffect(() => {
-    if (!sinc) return
-    const tarefas = sinc.tarefas.filter((t) => t.tipo === 'enviar')
-    setDoMac((atual) => {
-      const novo = { ...atual }
-      let mudou = false
-      for (const t of tarefas) {
-        const estado: Envio['estado'] = t.estado === 'erro' ? 'erro' : t.estado === 'pausado' ? 'pausado' : 'enviando'
-        const antes = novo[t.file_id]
-        const reabriu = antes && (antes.estado === 'pronto' || antes.estado === 'erro') && estado === 'enviando'
-        const lote = antes && !reabriu ? antes.lote : proximoLote()
-        novo[t.file_id] = { nome: t.nome, total: t.total, feitos: t.feitos, estado, erro: t.erro, lote }
-        mudou = true
-      }
-      // Sumiu da lista do motor sem erro: terminou.
-      for (const [id, e] of Object.entries(novo)) {
-        if ((e.estado === 'enviando' || e.estado === 'pausado') && !tarefas.some((t) => t.file_id === Number(id))) {
-          novo[Number(id)] = { ...e, estado: 'pronto', feitos: e.total }
-          mudou = true
-          void queryClient.invalidateQueries({ queryKey: ['title'] })
-        }
-      }
-      return mudou ? novo : atual
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sinc])
-
-  const linhas: Linha[] = [
-    ...Object.entries(doMac).map(([id, e]) => ({
-      chave: `mac-${id}`,
-      nome: e.nome,
-      total: e.total,
-      feitos: e.feitos,
-      estado: e.estado,
-      erro: e.erro,
-      lote: e.lote,
-      doMac: true,
-      tentar: () => void api.acaoDeNuvem(Number(id), 'enviar').then(() => queryClient.invalidateQueries({ queryKey: ['sincronizacao'] })),
-    })),
-    ...envios.map((e) => ({
-      chave: e.chave,
-      nome: e.arquivo.name,
-      total: e.arquivo.size,
-      feitos: e.enviados,
-      estado: e.estado,
-      erro: e.erro,
-      lote: e.lote,
-      doMac: false,
-      tentar: () => void roda(e),
-    })),
-  ].sort((a, b) => b.lote - a.lote)
-  const velocidades = useVelocidades(linhas)
-
-  const adiciona = (arquivos: FileList | null) => {
-    if (!arquivos || !destino) return
-    const lote = proximoLote()
-    const novos = [...arquivos].map<Envio>((arquivo) => ({
-      chave: `${arquivo.name}-${arquivo.size}-${Math.random()}`,
-      arquivo,
-      enviados: 0,
-      estado: hibridoRef.current ? 'enviando' : 'pausado',
-      lote,
-    }))
-    setEnvios((lista) => [...novos, ...lista])
-    if (hibridoRef.current) for (const e of novos) void roda(e)
-  }
 
   return (
     <Card
@@ -444,7 +210,7 @@ function UploadCard() {
         onDrop={(e) => {
           e.preventDefault()
           setArrastando(false)
-          if (hibrido) adiciona(e.dataTransfer.files)
+          if (hibrido) adiciona(e.dataTransfer.files, destino)
         }}
         className={[
           'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center text-sm transition',
@@ -463,77 +229,32 @@ function UploadCard() {
           disabled={!hibrido || !destino}
           className="sr-only"
           onChange={(e) => {
-            adiciona(e.target.files)
+            if (e.target.files) adiciona(e.target.files, destino)
             e.target.value = ''
           }}
         />
       </label>
 
-      {linhas.length > 0 && <LoteDeEnvio linhas={linhas} velocidades={velocidades} />}
-
-      {linhas.length > 0 && (
-        <ul className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line">
-          {linhas.map((e) => {
-            const pct = e.total > 0 ? Math.round((e.feitos / e.total) * 100) : 0
-            const bps = velocidades.get(e.chave) ?? 0
-            const falta = restante(bps > 0 ? (e.total - e.feitos) / bps : 0)
-            return (
-              <li key={e.chave} className="px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <NuvemIcon
-                      key={e.estado}
-                      estado={e.estado === 'pronto' ? 'concluido' : e.estado === 'erro' ? 'erro' : e.estado === 'pausado' ? 'local' : 'enviando'}
-                      className={e.estado === 'erro' ? 'shrink-0 text-danger' : e.estado === 'pronto' ? 'shrink-0 text-ok' : 'shrink-0 text-accent'}
-                    />
-                    <span className="line-clamp-1 font-medium">{e.nome}</span>
-                    {e.doMac && (
-                      <span className="shrink-0 rounded bg-elev px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted uppercase">
-                        do Mac
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    className={[
-                      'shrink-0 text-xs',
-                      e.estado === 'erro' ? 'text-danger' : e.estado === 'pronto' ? 'text-ok' : 'text-muted',
-                    ].join(' ')}
-                  >
-                    {e.estado === 'pronto'
-                      ? e.doMac
-                        ? 'no Mac e na nuvem'
-                        : 'na nuvem'
-                      : e.estado === 'pausado'
-                        ? `pausado · ${pct}%`
-                        : e.estado === 'erro'
-                          ? 'falhou'
-                          : `${pct}% de ${humanSize(e.total)}${falta ? ` · faltam ${falta} · ${mbps(bps)}` : ''}`}
-                  </span>
-                </div>
-                <div className="mt-1.5 h-1 overflow-hidden rounded bg-elev">
-                  <div
-                    className={`h-full transition-[width] ${e.estado === 'pronto' ? 'bg-ok' : 'bg-accent'}`}
-                    style={{ width: `${e.estado === 'pronto' ? 100 : pct}%` }}
-                  />
-                </div>
-                {e.erro && (
-                  <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-danger">
-                    <span>{e.erro}</span>
-                    {e.tentar && (
-                      <button type="button" onClick={e.tentar} className="underline">
-                        tentar de novo
-                      </button>
-                    )}
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+      {lote && (
+        <div className="mt-4 flex flex-col items-center gap-1">
+          <NuvemDeEnvio progresso={lote.progresso} ativo={lote.ativo} />
+          <p className="font-mono text-xs text-muted" aria-live="polite">
+            {lote.ativo
+              ? `${Math.round(lote.progresso * 100)}% de ${humanSize(lote.total)}${lote.falta ? ` · faltam ${lote.falta} · ${mbps(lote.bps)}` : ' · calculando…'}`
+              : lote.progresso >= 1
+                ? 'tudo na nuvem'
+                : ''}
+          </p>
+        </div>
       )}
+
+      <div className="mt-4">
+        <ListaDeEnvios linhas={linhas} velocidades={velocidades} />
+      </div>
     </Card>
   )
 }
+
 
 function iconeDaTarefa(tipo: string, estado: string): EstadoNuvem {
   if (estado === 'erro') return 'erro'

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, downloadUrl, soNaNuvem, type AcaoDeNuvem, type FileInfo, type TitleDetail } from '../lib/api'
@@ -17,9 +17,24 @@ export function Title() {
   const player = usePlayer()
   const [matching, setMatching] = useState(false)
 
+  // Enquanto algum arquivo deste título estiver indo ou vindo da nuvem, a
+  // página volta a perguntar ao servidor: sem isso, "enviando…" só virava
+  // "no Mac e na nuvem" depois de um F5. As tarefas vêm do mesmo cache que o
+  // cartão de envios mantém atualizado.
+  const { data: sinc } = useQuery({ queryKey: ['sincronizacao'], queryFn: api.sincronizacao, enabled: false })
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['title', titleId],
     queryFn: () => api.title(titleId),
+    refetchInterval: (q) => {
+      const d = q.state.data
+      if (!d) return false
+      const arquivos = [...d.files, ...(d.seasons ?? []).flatMap((t) => t.episodes)]
+      const ids = new Set(arquivos.map((f) => f.id))
+      const emTransito =
+        arquivos.some((f) => f.localizacao === 'enviando' || f.localizacao === 'baixando') ||
+        (sinc?.tarefas ?? []).some((t) => ids.has(t.file_id) && t.estado !== 'erro')
+      return emTransito ? 2000 : false
+    },
   })
 
   const favorite = useMutation({
@@ -485,11 +500,16 @@ function AcoesDeNuvem({ file }: { file: FileInfo }) {
   const hibrido = useHibrido()
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.me })
   const [pedido, setPedido] = useState<AcaoDeNuvem | null>(null)
+  // O pedido vale até o servidor mudar a localização do arquivo: daí em
+  // diante quem diz o estado é ela (enviando, baixando, ambos…).
+  useEffect(() => setPedido(null), [file.localizacao])
   const acao = useMutation({
     mutationFn: (a: AcaoDeNuvem) => api.acaoDeNuvem(file.id, a),
     onSuccess: (_, a) => {
       setPedido(a)
-      // O motor trabalha em segundo plano; a tela volta a olhar em instantes.
+      // O motor trabalha em segundo plano: as tarefas passam a ser vigiadas
+      // pelo cartão de envios, e a página volta a olhar o título.
+      void queryClient.invalidateQueries({ queryKey: ['sincronizacao'] })
       window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['title'] }), 1500)
     },
   })
