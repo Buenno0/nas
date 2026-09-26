@@ -37,6 +37,11 @@ func TestSnapshotReplicaOMacNaNuvem(t *testing.T) {
 	titulo, _ := a.db.UpsertTitle(ctx, db.Title{LibraryID: a.lib.ID, Kind: "movie", Name: "Stalker", SortName: "stalker", Year: 1979})
 	a.db.SetFileTitle(ctx, local.ID, titulo)
 	naNuvem := a.arquivoLocal(t, "Solaris (1972).mkv", 1000)
+	// O objeto existe de fato no bucket: sem ele, a reconciliação de fundo
+	// (que esquece o que foi apagado por fora) rebaixaria o item a local.
+	if err := arm.Gravar(ctx, "bibliotecas/1/x/Solaris (1972).mkv", []byte("filme"), ""); err != nil {
+		t.Fatal(err)
+	}
 	a.db.MarcaNaNuvem(ctx, naNuvem.ID, db.LocalAmbos, "bibliotecas/1/x/Solaris (1972).mkv")
 	user, _ := a.db.UserByName(ctx, "karen")
 	a.db.SaveProgress(ctx, user.ID, naNuvem.ID, 600, 6000)
