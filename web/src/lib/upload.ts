@@ -7,6 +7,10 @@
 import { api, type ParteEnviada, type Upload } from './api'
 
 const PARALELAS = 4
+// Com o link de subida lento, 4 partes disputam a banda e alguma fica ~20 s
+// sem enviar nada: o S3 encerra a conexão por inatividade ("falha de rede").
+// Depois da primeira parte que cai, o envio segue com 2.
+const PARALELAS_NO_APERTO = 2
 const URLS_POR_PEDIDO = 20
 
 export interface ProgressoEnvio {
@@ -90,6 +94,7 @@ export async function enviar(
   // tenta de novo antes de derrubar o arquivo inteiro. O kill switch não:
   // ele pausa na hora. A URL assinada vale 1 h, então é reaproveitada.
   const esperas = [2000, 5000, 10000]
+  let limite = PARALELAS
   const enviaComTentativas = async (n: number) => {
     for (let tentativa = 0; ; tentativa++) {
       try {
@@ -98,6 +103,7 @@ export async function enviar(
         if (e instanceof PausadoPeloModo || controle.signal.aborted || tentativa >= esperas.length) throw e
         emVoo.delete(n)
         avisa()
+        limite = Math.min(limite, PARALELAS_NO_APERTO)
         api.anotarEnvio(upload.id, { tipo: 'erro', erro: `parte ${n}: ${(e as Error).message}; tentando de novo (${tentativa + 1}/${esperas.length})` })
         await new Promise((r) => window.setTimeout(r, esperas[tentativa]))
       }
@@ -131,8 +137,9 @@ export async function enviar(
     })
 
   let proxima = 0
-  const trabalhador = async () => {
-    while (proxima < faltam.length) {
+  const trabalhador = async (id: number) => {
+    // Os trabalhadores acima do limite encerram depois da parte em que estão.
+    while (proxima < faltam.length && id < limite) {
       if (controle.signal.aborted) throw new PausadoPeloModo()
       const n = faltam[proxima++]
       const etag = await enviaComTentativas(n)
@@ -144,7 +151,7 @@ export async function enviar(
   }
 
   try {
-    await Promise.all(Array.from({ length: Math.min(PARALELAS, faltam.length) }, trabalhador))
+    await Promise.all(Array.from({ length: Math.min(PARALELAS, faltam.length) }, (_, id) => trabalhador(id)))
   } catch (e) {
     controle.abort()
     if (!ativo() || e instanceof PausadoPeloModo) {
