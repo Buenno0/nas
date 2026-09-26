@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -491,5 +492,46 @@ func TestApagadoPorForaDoBucket(t *testing.T) {
 	}
 	if f := a.loc(t, fica.ID); f.Localizacao != db.LocalNuvem {
 		t.Fatalf("item que continua no bucket mudou para %s", f.Localizacao)
+	}
+}
+
+// "Apagar da nuvem": o objeto, os derivados e a entrada no catálogo somem;
+// um item com cópia no Mac é recusado (esse é o "Tirar da nuvem").
+func TestApagarDaNuvem(t *testing.T) {
+	a := montar(t)
+	ctx := context.Background()
+	arm, _, _ := a.chave.Hibrido()
+	key := "bibliotecas/1/z/Solaris (1972).mkv"
+	for _, k := range []string{key, cloud.PrefixoDosDerivados(key) + "compat.mp4", cloud.PrefixoDosDerivados(key) + "frame.jpg"} {
+		if err := arm.Gravar(ctx, k, []byte("x"), ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := a.arquivoLocal(t, "Solaris (1972).mkv", 100)
+	a.db.MarcaNaNuvem(ctx, f.ID, db.LocalNuvem, key)
+	a.db.GravaDerivados(ctx, f.ID, []db.Derivado{{Tipo: "compat", Key: cloud.PrefixoDosDerivados(key) + "compat.mp4"}})
+
+	ambos := a.arquivoLocal(t, "Stalker (1979).mkv", 100)
+	a.db.MarcaNaNuvem(ctx, ambos.ID, db.LocalAmbos, "bibliotecas/1/y/Stalker (1979).mkv")
+	if err := a.motor.ApagarDaNuvem(ctx, ambos.ID); !errors.Is(err, ErrEstado) {
+		t.Fatalf("apagar item com cópia no Mac: %v, quero ErrEstado", err)
+	}
+
+	if err := a.motor.ApagarDaNuvem(ctx, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	a.esperar(t)
+	if _, err := a.db.FileByID(ctx, f.ID); err == nil {
+		t.Fatal("o item continuou no catálogo")
+	}
+	restou := 0
+	arm.Listar(ctx, "", func(o cloud.Objeto) error {
+		if strings.Contains(o.Key, "Solaris") || strings.HasPrefix(o.Key, cloud.PrefixoDosDerivados(key)) {
+			restou++
+		}
+		return nil
+	})
+	if restou != 0 {
+		t.Fatalf("%d objetos do item ficaram no bucket", restou)
 	}
 }

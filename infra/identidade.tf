@@ -76,6 +76,14 @@ resource "aws_iam_role_policy" "mac" {
         Resource = ["${aws_s3_bucket.midia.arn}/derivados/*", "${aws_s3_bucket.midia.arn}/catalogo/*"]
       },
       {
+        # …e apaga os derivados quando o item sai da nuvem ("Apagar da
+        # nuvem", "Tirar da nuvem"). O catálogo não entra aqui.
+        Sid      = "ApagarDerivados"
+        Effect   = "Allow"
+        Action   = ["s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.midia.arn}/derivados/*"
+      },
+      {
         Sid      = "PedirJobs"
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]

@@ -485,8 +485,63 @@ func (m *Motor) RemoverDaNuvem(ctx context.Context, fileID int64) error {
 			if err := arm.Apagar(ctx, f.NuvemKey); err != nil {
 				return err
 			}
+			m.apagarDerivados(ctx, arm, f.ID, f.NuvemKey)
+			m.db.Anota(ctx, "bucket.removido", 0, f.ID, filepath.Base(f.RelPath), map[string]any{"key": f.NuvemKey, "agora": "só no Mac"})
 			return m.db.MarcaNaNuvem(ctx, f.ID, db.LocalLocal, "")
 		})
+}
+
+// ApagarDaNuvem apaga de vez um item que só existe na nuvem: o objeto, os
+// derivados do worker e a entrada no catálogo. Com o versionamento do bucket,
+// a versão anterior do original ainda fica recuperável por 30 dias (lifecycle
+// "versoes-antigas"). Nunca toca num item com cópia no disco — para esses, o
+// caminho é "Tirar da nuvem".
+func (m *Motor) ApagarDaNuvem(ctx context.Context, fileID int64) error {
+	if m.chave.Modo() != cloud.ModoHibrido {
+		return ErrSoHibrido
+	}
+	f, err := m.db.FileByID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+	if f.Localizacao != db.LocalNuvem || f.NuvemKey == "" {
+		return ErrEstado
+	}
+	return m.enfileirar(Tarefa{FileID: fileID, Tipo: "apagar", Nome: filepath.Base(f.RelPath), Total: f.Size},
+		func(ctx context.Context, arm cloud.Armazenamento, t *Tarefa) error {
+			if err := arm.Apagar(ctx, f.NuvemKey); err != nil {
+				return err
+			}
+			m.apagarDerivados(ctx, arm, f.ID, f.NuvemKey)
+			if _, err := m.db.ApagaSoDaNuvem(ctx, f.ID); err != nil {
+				return err
+			}
+			if _, err := m.db.PruneEmptyTitles(ctx, f.LibraryID); err != nil {
+				return err
+			}
+			m.db.Anota(ctx, "bucket.apagado", 0, f.ID, filepath.Base(f.RelPath), map[string]any{"key": f.NuvemKey, "tamanho": f.Size})
+			return nil
+		})
+}
+
+// apagarDerivados limpa miniaturas, legendas e o MP4 compatível que o worker
+// gerou para a chave. Falhar aqui não desfaz a remoção: sobra lixo pequeno no
+// bucket, anotado no diário.
+func (m *Motor) apagarDerivados(ctx context.Context, arm cloud.Armazenamento, fileID int64, key string) {
+	prefixo := cloud.PrefixoDosDerivados(key)
+	var chaves []string
+	if err := arm.Listar(ctx, prefixo, func(o cloud.Objeto) error {
+		chaves = append(chaves, o.Key)
+		return nil
+	}); err != nil {
+		m.db.Anota(ctx, "bucket.erro", 0, fileID, path.Base(key), map[string]any{"erro": "listando derivados: " + err.Error()})
+	}
+	for _, k := range chaves {
+		if err := arm.Apagar(ctx, k); err != nil {
+			m.db.Anota(ctx, "bucket.erro", 0, fileID, path.Base(key), map[string]any{"erro": "apagando " + k + ": " + err.Error()})
+		}
+	}
+	_ = m.db.EsqueceDerivados(ctx, fileID)
 }
 
 // --- Reconciliação ----------------------------------------------------------

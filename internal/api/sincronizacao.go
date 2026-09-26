@@ -41,6 +41,8 @@ func (s *Server) handleAcaoDeNuvem(w http.ResponseWriter, r *http.Request) {
 		err = s.sincro.Liberar(r.Context(), id)
 	case "remover":
 		err = s.sincro.RemoverDaNuvem(r.Context(), id)
+	case "apagar":
+		err = s.sincro.ApagarDaNuvem(r.Context(), id)
 	default:
 		writeError(w, http.StatusNotFound, "ação desconhecida")
 		return

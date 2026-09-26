@@ -90,3 +90,13 @@ func (d *DB) ProcessamentoDesde(ctx context.Context, fileID int64) (estado, erro
 	}
 	return estado, erro, quando
 }
+
+// EsqueceDerivados apaga do catálogo os derivados de um arquivo e o pedido
+// de processamento (os objetos no bucket são apagados por quem chama).
+func (d *DB) EsqueceDerivados(ctx context.Context, fileID int64) error {
+	if _, err := d.ExecContext(ctx, `DELETE FROM derivados WHERE media_file_id = ?`, fileID); err != nil {
+		return err
+	}
+	_, err := d.ExecContext(ctx, `DELETE FROM processamento WHERE media_file_id = ?`, fileID)
+	return err
+}

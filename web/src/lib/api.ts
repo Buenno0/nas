@@ -52,7 +52,7 @@ export interface Library {
   espelhada?: boolean
 }
 
-export type AcaoDeNuvem = 'enviar' | 'fixar' | 'liberar' | 'remover'
+export type AcaoDeNuvem = 'enviar' | 'fixar' | 'liberar' | 'remover' | 'apagar'
 
 export interface TarefaDeSincronizacao {
   file_id: number

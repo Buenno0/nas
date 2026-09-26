@@ -263,7 +263,7 @@ function iconeDaTarefa(tipo: string, estado: string): EstadoNuvem {
   return tipo === 'fixar' ? 'baixando' : tipo === 'enviar' ? 'enviando' : 'sincronizando'
 }
 
-const rotuloDaTarefa = { enviar: 'enviando', fixar: 'baixando', liberar: 'liberando', remover: 'removendo' }
+const rotuloDaTarefa = { enviar: 'enviando', fixar: 'baixando', liberar: 'liberando', remover: 'removendo', apagar: 'apagando' }
 
 function SincronizacaoCard() {
   const queryClient = useQueryClient()
