@@ -71,6 +71,10 @@ type Nuvem struct {
 	FilaEventos string `json:"fila_eventos,omitempty"`
 	Topico      string `json:"topico_catalogo,omitempty"`
 
+	// Aceleracao manda as partes dos envios pelo S3 Transfer Acceleration
+	// (bucket com aceleração ligada no OpenTofu; +US$ 0,04/GB enviado).
+	Aceleracao bool `json:"aceleracao,omitempty"`
+
 	// Endereco é onde a instância cloud atende (https://…ts.net). O Mac o
 	// anuncia no /healthz para os apps trocarem sozinhos de rota fora de casa.
 	Endereco string `json:"endereco,omitempty"`

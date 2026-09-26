@@ -31,10 +31,15 @@ import (
 func init() { cloud.Registrar(Conectar) }
 
 type bucket struct {
-	s3      *s3.Client
-	assina  *s3.PresignClient
-	nome    string
-	prefixo string
+	s3     *s3.Client
+	assina *s3.PresignClient
+	// partes vai pelo S3 Transfer Acceleration quando ligado: as partes
+	// entram no ponto da AWS mais perto de quem envia e seguem pela rede dela.
+	// Só as partes; o resto (HEAD, listar, concluir) fica no endpoint normal.
+	partes       *s3.Client
+	assinaPartes *s3.PresignClient
+	nome         string
+	prefixo      string
 
 	sqs *sqs.Client
 	sns *sns.Client
@@ -70,7 +75,13 @@ func Conectar(ctx context.Context, cfg config.Nuvem, cliente *http.Client) (clou
 		}
 		o.UsePathStyle = cfg.PathStyle
 	})
-	b := &bucket{s3: c, assina: s3.NewPresignClient(c), nome: cfg.Bucket, prefixo: cfg.Prefixo,
+	partes := c
+	// Aceleração não existe num S3 compatível (MinIO) nem com endpoint próprio.
+	if cfg.Aceleracao && cfg.Endpoint == "" {
+		partes = s3.NewFromConfig(awsCfg, func(o *s3.Options) { o.UseAccelerate = true })
+	}
+	b := &bucket{s3: c, assina: s3.NewPresignClient(c), partes: partes, assinaPartes: s3.NewPresignClient(partes),
+		nome: cfg.Bucket, prefixo: cfg.Prefixo,
 		sqs: sqs.NewFromConfig(awsCfg), sns: sns.NewFromConfig(awsCfg),
 		cred: awsCfg.Credentials, regiao: cfg.Regiao, awsCfg: awsCfg}
 
@@ -227,7 +238,7 @@ func (b *bucket) IniciarEnvio(ctx context.Context, key, contentType string) (str
 }
 
 func (b *bucket) URLDaParte(ctx context.Context, key, uploadID string, n int32, ttl time.Duration) (string, error) {
-	req, err := b.assina.PresignUploadPart(ctx, &s3.UploadPartInput{
+	req, err := b.assinaPartes.PresignUploadPart(ctx, &s3.UploadPartInput{
 		Bucket: &b.nome, Key: aws.String(b.chave(key)), UploadId: &uploadID, PartNumber: &n,
 	}, s3.WithPresignExpires(ttl))
 	if err != nil {
@@ -237,7 +248,7 @@ func (b *bucket) URLDaParte(ctx context.Context, key, uploadID string, n int32, 
 }
 
 func (b *bucket) EnviarParte(ctx context.Context, key, uploadID string, n int32, corpo io.ReadSeeker, tamanho int64) (string, error) {
-	out, err := b.s3.UploadPart(ctx, &s3.UploadPartInput{
+	out, err := b.partes.UploadPart(ctx, &s3.UploadPartInput{
 		Bucket: &b.nome, Key: aws.String(b.chave(key)), UploadId: &uploadID,
 		PartNumber: &n, Body: corpo, ContentLength: &tamanho,
 	})

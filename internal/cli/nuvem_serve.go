@@ -33,6 +33,7 @@ func nuvemDoAmbiente() config.Nuvem {
 		FilaEventos:  os.Getenv("NAS_FILA_EVENTOS"),
 		Topico:       os.Getenv("NAS_TOPICO_CATALOGO"),
 		Worker:       os.Getenv("NAS_WORKER"),
+		Aceleracao:   os.Getenv("NAS_ACELERACAO") == "true",
 	}
 }
 

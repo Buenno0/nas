@@ -72,3 +72,9 @@ variable "nome_na_tailnet" {
   type        = string
   default     = "ozymandias-nuvem"
 }
+
+variable "aceleracao" {
+  description = "S3 Transfer Acceleration nos envios (partes do multipart). +US$ 0,04/GB enviado."
+  type        = bool
+  default     = true
+}

@@ -213,6 +213,7 @@ resource "aws_ecs_task_definition" "nuvem" {
         { name = "NAS_CDN_DOMINIO", value = aws_cloudfront_distribution.midia.domain_name },
         { name = "NAS_CDN_CHAVE_ID", value = aws_cloudfront_public_key.cdn.id },
         { name = "NAS_CDN_PARAMETRO", value = aws_ssm_parameter.chave_cdn.name },
+        { name = "NAS_ACELERACAO", value = tostring(var.aceleracao) },
       ]
       secrets          = [for p in aws_ssm_parameter.tmdb : { name = "NAS_TMDB_KEY", valueFrom = p.arn }]
       logConfiguration = local.log

@@ -117,3 +117,13 @@ resource "aws_s3_bucket_policy" "midia" {
   })
   depends_on = [aws_s3_bucket_public_access_block.midia]
 }
+
+# S3 Transfer Acceleration: as partes dos envios entram no ponto da AWS mais
+# perto de quem envia (São Paulo, para o Brasil) e seguem pela rede da AWS até
+# us-east-1. Medido daqui: 2x mais rápido que o upload direto. +US$ 0,04/GB,
+# cobrado só quando a aceleração de fato ganha. O app só usa com
+# nuvem.aceleracao ligado (e a instância cloud, com var.aceleracao).
+resource "aws_s3_bucket_accelerate_configuration" "midia" {
+  bucket = aws_s3_bucket.midia.id
+  status = var.aceleracao ? "Enabled" : "Suspended"
+}
