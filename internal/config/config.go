@@ -71,6 +71,10 @@ type Nuvem struct {
 	FilaEventos string `json:"fila_eventos,omitempty"`
 	Topico      string `json:"topico_catalogo,omitempty"`
 
+	// Endereco é onde a instância cloud atende (https://…ts.net). O Mac o
+	// anuncia no /healthz para os apps trocarem sozinhos de rota fora de casa.
+	Endereco string `json:"endereco,omitempty"`
+
 	// Worker é o serviço ECS dos workers, "cluster/servico". Vazio =
 	// "ozymandias/ozymandias-worker", o que o OpenTofu cria.
 	Worker string `json:"worker,omitempty"`

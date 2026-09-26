@@ -282,13 +282,20 @@ func (s *Server) midia(h http.HandlerFunc) http.Handler {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"status":      "ok",
 		"time":        time.Now().Format(time.RFC3339),
 		"api_version": 2,
-		"features":    []string{"device_pairing", "playback_caps_v2"},
+		"features":    []string{"device_pairing", "playback_caps_v2", "rota_nuvem"},
 		"papel":       s.papel(),
-	})
+	}
+	// O Mac anuncia a instância cloud: o app entra nas duas e usa a nuvem
+	// quando o Mac não responde (fora de casa). Público como o próprio
+	// endereço, que já é público pelo Funnel.
+	if e := s.ConfigNuvem().Endereco; e != "" && !s.opts.NaNuvem {
+		resp["endereco_nuvem"] = e
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) papel() string {
