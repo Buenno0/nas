@@ -219,7 +219,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// destrutivas (liberar, remover) só nascem daqui, nunca de um evento.
 	mux.Handle("GET /api/sincronizacao", s.adminOnly(s.handleSincronizacao))
 	mux.Handle("POST /api/sincronizacao", s.adminOnly(s.handleReconciliar))
-	mux.Handle("POST /api/files/{id}/nuvem/{acao}", s.soNoMac(s.adminOnly(s.handleAcaoDeNuvem)))
+	// Na instância cloud só "apagar" (o bucket é dela também); mover arquivos
+	// entre disco e bucket é do Mac. A checagem fica no handler.
+	mux.Handle("POST /api/files/{id}/nuvem/{acao}", s.adminOnly(s.handleAcaoDeNuvem))
 	mux.Handle("PUT /api/libraries/{id}/espelhada", s.soNoMac(s.adminOnly(s.handleEspelhada)))
 
 	mux.Handle("GET /api/settings", s.protected(s.handleGetSettings))

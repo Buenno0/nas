@@ -102,3 +102,17 @@ func TestTamanhoDaParteCabeNoLimite(t *testing.T) {
 		t.Error("ChaveDoUpload aceitou subir diretório")
 	}
 }
+
+// Na instância cloud, das ações de nuvem só "apagar" passa.
+func TestInstanciaCloudSoApaga(t *testing.T) {
+	srv, admin, _ := prepara(t)
+	srv.opts.NaNuvem = true
+	for _, acao := range []string{"enviar", "fixar", "liberar", "remover"} {
+		if rec := chama(t, srv, http.MethodPost, "/api/files/1/nuvem/"+acao, admin, ""); rec.Code != http.StatusForbidden {
+			t.Fatalf("%s na nuvem = %d, quero 403", acao, rec.Code)
+		}
+	}
+	if rec := chama(t, srv, http.MethodPost, "/api/files/1/nuvem/apagar", admin, ""); rec.Code == http.StatusForbidden {
+		t.Fatal("apagar foi recusado na nuvem")
+	}
+}

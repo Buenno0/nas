@@ -1,106 +1,69 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  api,
-  downloadUrl,
-  soNaNuvem,
-  type AcaoDeNuvem,
-  type FileInfo,
-  type TitleDetail,
-} from "../lib/api";
-import { useDisponibilidade, useHibrido, useModoNuvem } from "../lib/nuvem";
-import {
-  clockTime,
-  gradientFor,
-  humanDuration,
-  humanSize,
-  kindLabel,
-} from "../lib/format";
-import {
-  CloudOffIcon,
-  DownloadIcon,
-  HeartIcon,
-  NuvemIcon,
-  PauseIcon,
-  PlayIcon,
-} from "../components/icons";
-import { ErrorState, Spinner } from "../components/states";
-import { PhotoGrid } from "../components/PhotoGrid";
-import { ColecaoPicker } from "../components/ColecaoPicker";
-import { usePlayer, type Track } from "../lib/player";
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, downloadUrl, soNaNuvem, type AcaoDeNuvem, type FileInfo, type TitleDetail } from '../lib/api'
+import { useDisponibilidade, useHibrido, useModoNuvem } from '../lib/nuvem'
+import { clockTime, gradientFor, humanDuration, humanSize, kindLabel } from '../lib/format'
+import { CloudOffIcon, DownloadIcon, HeartIcon, NuvemIcon, PauseIcon, PlayIcon } from '../components/icons'
+import { ErrorState, Spinner } from '../components/states'
+import { PhotoGrid } from '../components/PhotoGrid'
+import { ColecaoPicker } from '../components/ColecaoPicker'
+import { usePlayer, type Track } from '../lib/player'
 
 export function Title() {
-  const { id } = useParams();
-  const titleId = Number(id);
-  const queryClient = useQueryClient();
-  const player = usePlayer();
-  const [matching, setMatching] = useState(false);
+  const { id } = useParams()
+  const titleId = Number(id)
+  const queryClient = useQueryClient()
+  const player = usePlayer()
+  const [matching, setMatching] = useState(false)
 
   // Enquanto algum arquivo deste título estiver indo ou vindo da nuvem, a
   // página volta a perguntar ao servidor: sem isso, "enviando…" só virava
   // "no Mac e na nuvem" depois de um F5. As tarefas vêm do mesmo cache que o
   // cartão de envios mantém atualizado.
-  const { data: sinc } = useQuery({
-    queryKey: ["sincronizacao"],
-    queryFn: api.sincronizacao,
-    enabled: false,
-  });
+  const { data: sinc } = useQuery({ queryKey: ['sincronizacao'], queryFn: api.sincronizacao, enabled: false })
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["title", titleId],
+    queryKey: ['title', titleId],
     queryFn: () => api.title(titleId),
     refetchInterval: (q) => {
-      const d = q.state.data;
-      if (!d) return false;
-      const arquivos = [
-        ...d.files,
-        ...(d.seasons ?? []).flatMap((t) => t.episodes),
-      ];
-      const ids = new Set(arquivos.map((f) => f.id));
+      const d = q.state.data
+      if (!d) return false
+      const arquivos = [...d.files, ...(d.seasons ?? []).flatMap((t) => t.episodes)]
+      const ids = new Set(arquivos.map((f) => f.id))
       const emTransito =
-        arquivos.some(
-          (f) => f.localizacao === "enviando" || f.localizacao === "baixando",
-        ) ||
-        (sinc?.tarefas ?? []).some(
-          (t) => ids.has(t.file_id) && t.estado !== "erro",
-        );
-      if (emTransito) return 2000;
+        arquivos.some((f) => f.localizacao === 'enviando' || f.localizacao === 'baixando') ||
+        (sinc?.tarefas ?? []).some((t) => ids.has(t.file_id) && t.estado !== 'erro')
+      if (emTransito) return 2000
       // O worker leva minutos: perguntar de 10 em 10 s basta para o aviso
       // virar "pronto para tocar" sem F5.
-      return arquivos.some((f) => f.preparo_nuvem === "preparando")
-        ? 10000
-        : false;
+      return arquivos.some((f) => f.preparo_nuvem === 'preparando') ? 10000 : false
     },
-  });
+  })
 
   const favorite = useMutation({
     mutationFn: (on: boolean) => api.setFavorite(titleId, on),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["title", titleId] });
-      void queryClient.invalidateQueries({ queryKey: ["home"] });
+      void queryClient.invalidateQueries({ queryKey: ['title', titleId] })
+      void queryClient.invalidateQueries({ queryKey: ['home'] })
     },
-  });
+  })
 
-  if (isLoading) return <Spinner />;
-  if (isError || !data)
-    return <ErrorState error={error} retry={() => void refetch()} />;
+  if (isLoading) return <Spinner />
+  if (isError || !data) return <ErrorState error={error} retry={() => void refetch()} />
 
   // Quando o mesmo título tem o original e uma versão convertida (.mkv e
   // .mp4 lado a lado), o botão de play tem que abrir a que o navegador toca.
-  const playable = data.files.filter(playsInBrowser);
-  const candidates = playable.length > 0 ? playable : data.files;
+  const playable = data.files.filter(playsInBrowser)
+  const candidates = playable.length > 0 ? playable : data.files
 
   // Retomar = o que está pela metade; senão o primeiro ainda não assistido;
   // senão o começo de tudo (série toda vista).
   const resume =
     candidates.find((f) => (f.position ?? 0) > 0 && !f.finished) ??
     candidates.find((f) => !f.finished) ??
-    candidates[0];
-  const resumeAt = resume && !resume.finished ? (resume.position ?? 0) : 0;
-  const totalDuration = data.files.reduce(
-    (sum, f) => sum + (f.duration ?? 0),
-    0,
-  );
+    candidates[0]
+  const resumeAt = resume && !resume.finished ? (resume.position ?? 0) : 0
+  const totalDuration = data.files.reduce((sum, f) => sum + (f.duration ?? 0), 0)
 
   return (
     <article>
@@ -111,8 +74,8 @@ export function Title() {
             data.backdrop_url
               ? {
                   backgroundImage: `url(${data.backdrop_url})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
                 }
               : { background: gradientFor(data.name) }
           }
@@ -123,16 +86,9 @@ export function Title() {
           <div className="w-32 shrink-0 overflow-hidden rounded-xl ring-1 ring-line sm:w-44">
             <div className="aspect-[2/3]">
               {data.poster_url ? (
-                <img
-                  src={data.poster_url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
+                <img src={data.poster_url} alt="" className="h-full w-full object-cover" />
               ) : (
-                <div
-                  className="h-full w-full"
-                  style={{ background: gradientFor(data.name) }}
-                />
+                <div className="h-full w-full" style={{ background: gradientFor(data.name) }} />
               )}
             </div>
           </div>
@@ -141,32 +97,28 @@ export function Title() {
             <p className="rotulo">
               {kindLabel[data.kind] ?? data.kind} · {data.library}
             </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-4xl">
-              {data.name}
-            </h1>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-4xl">{data.name}</h1>
             <p className="mt-1.5 text-sm text-muted">
               {[
-                data.year || "",
-                data.artist || "",
+                data.year || '',
+                data.artist || '',
                 data.files.length > 1
                   ? `${data.files.length} arquivos`
                   : humanDuration(totalDuration),
-                data.rating ? `★ ${data.rating.toFixed(1)}` : "",
+                data.rating ? `★ ${data.rating.toFixed(1)}` : '',
               ]
                 .filter(Boolean)
-                .join(" · ")}
+                .join(' · ')}
             </p>
 
             {data.overview && (
-              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted">
-                {data.overview}
-              </p>
+              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted">{data.overview}</p>
             )}
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
               {/* Álbum toca na barra de música; foto abre pela galeria; o
                   resto vai para o player de vídeo. */}
-              {data.kind === "album" && data.files.length > 0 && (
+              {data.kind === 'album' && data.files.length > 0 && (
                 <button
                   type="button"
                   onClick={() => player.play(albumTracks(data), 0)}
@@ -176,15 +128,13 @@ export function Title() {
                 </button>
               )}
 
-              {data.kind !== "album" && data.kind !== "photos" && resume && (
+              {data.kind !== 'album' && data.kind !== 'photos' && resume && (
                 <Link
                   to={`/watch/${resume.id}`}
                   className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:opacity-90"
                 >
                   <PlayIcon />
-                  {resumeAt > 0
-                    ? `Continuar de ${clockTime(resumeAt)}`
-                    : "Assistir"}
+                  {resumeAt > 0 ? `Continuar de ${clockTime(resumeAt)}` : 'Assistir'}
                 </Link>
               )}
               <button
@@ -192,27 +142,27 @@ export function Title() {
                 onClick={() => favorite.mutate(!data.favorite)}
                 aria-pressed={data.favorite}
                 className={[
-                  "inline-flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-medium transition",
+                  'inline-flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-medium transition',
                   data.favorite
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-line bg-surface text-muted hover:text-ink",
-                ].join(" ")}
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-line bg-surface text-muted hover:text-ink',
+                ].join(' ')}
               >
                 <HeartIcon filled={data.favorite} />
-                {data.favorite ? "Nos favoritos" : "Favoritar"}
+                {data.favorite ? 'Nos favoritos' : 'Favoritar'}
               </button>
 
               <ColecaoPicker titleId={titleId} />
 
-              {(data.kind === "movie" || data.kind === "tv") && (
+              {(data.kind === 'movie' || data.kind === 'tv') && (
                 <button
                   type="button"
                   onClick={() => setMatching(true)}
                   className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm font-medium text-muted transition hover:text-ink"
                 >
-                  {data.meta_state === "matched" || data.meta_state === "manual"
-                    ? "Trocar capa"
-                    : "Buscar capa"}
+                  {data.meta_state === 'matched' || data.meta_state === 'manual'
+                    ? 'Trocar capa'
+                    : 'Buscar capa'}
                 </button>
               )}
             </div>
@@ -221,9 +171,9 @@ export function Title() {
       </header>
 
       <section className="px-4 pb-10 sm:px-6">
-        {data.kind === "photos" ? (
+        {data.kind === 'photos' ? (
           <PhotoGrid photos={data.files} />
-        ) : data.kind === "album" ? (
+        ) : data.kind === 'album' ? (
           <TrackList detail={data} />
         ) : data.seasons && data.seasons.length > 0 ? (
           <SeasonList detail={data} />
@@ -233,14 +183,10 @@ export function Title() {
       </section>
 
       {matching && (
-        <MatchDialog
-          titleId={titleId}
-          initialQuery={data.name}
-          onClose={() => setMatching(false)}
-        />
+        <MatchDialog titleId={titleId} initialQuery={data.name} onClose={() => setMatching(false)} />
       )}
     </article>
-  );
+  )
 }
 
 /** Correção manual do match: mostra os candidatos do TMDB e aplica o escolhido. */
@@ -249,29 +195,29 @@ function MatchDialog({
   initialQuery,
   onClose,
 }: {
-  titleId: number;
-  initialQuery: string;
-  onClose: () => void;
+  titleId: number
+  initialQuery: string
+  onClose: () => void
 }) {
-  const queryClient = useQueryClient();
-  const [term, setTerm] = useState(initialQuery);
-  const [submitted, setSubmitted] = useState(initialQuery);
+  const queryClient = useQueryClient()
+  const [term, setTerm] = useState(initialQuery)
+  const [submitted, setSubmitted] = useState(initialQuery)
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["matches", titleId, submitted],
+    queryKey: ['matches', titleId, submitted],
     queryFn: () => api.matches(titleId, submitted),
     retry: false,
-  });
+  })
 
   const apply = useMutation({
     mutationFn: (tmdbId: number) => api.applyMatch(titleId, tmdbId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["title", titleId] });
-      void queryClient.invalidateQueries({ queryKey: ["home"] });
-      void queryClient.invalidateQueries({ queryKey: ["titles"] });
-      onClose();
+      void queryClient.invalidateQueries({ queryKey: ['title', titleId] })
+      void queryClient.invalidateQueries({ queryKey: ['home'] })
+      void queryClient.invalidateQueries({ queryKey: ['titles'] })
+      onClose()
     },
-  });
+  })
 
   return (
     <div
@@ -289,8 +235,8 @@ function MatchDialog({
           <h2 className="mb-3 text-sm font-semibold">Escolher no TMDB</h2>
           <form
             onSubmit={(e) => {
-              e.preventDefault();
-              setSubmitted(term);
+              e.preventDefault()
+              setSubmitted(term)
             }}
             className="flex gap-2"
           >
@@ -315,15 +261,11 @@ function MatchDialog({
             <p className="p-4 text-sm text-muted">
               {(error as Error).message}
               <br />
-              <span className="text-xs">
-                Confira a chave do TMDB nas configurações.
-              </span>
+              <span className="text-xs">Confira a chave do TMDB nas configurações.</span>
             </p>
           )}
           {data?.results.length === 0 && (
-            <p className="p-4 text-sm text-muted">
-              Nenhum resultado para esse termo.
-            </p>
+            <p className="p-4 text-sm text-muted">Nenhum resultado para esse termo.</p>
           )}
 
           <ul className="flex flex-col gap-1">
@@ -337,20 +279,15 @@ function MatchDialog({
                 >
                   <span className="h-20 w-14 shrink-0 overflow-hidden rounded bg-elev">
                     {candidate.poster && (
-                      <img
-                        src={candidate.poster}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={candidate.poster} alt="" className="h-full w-full object-cover" />
                     )}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-medium">
-                      {candidate.name}{" "}
-                      {candidate.year ? `(${candidate.year})` : ""}
+                      {candidate.name} {candidate.year ? `(${candidate.year})` : ''}
                     </span>
                     <span className="line-clamp-3 block text-xs text-muted">
-                      {candidate.overview || "Sem sinopse."}
+                      {candidate.overview || 'Sem sinopse.'}
                     </span>
                   </span>
                 </button>
@@ -370,13 +307,13 @@ function MatchDialog({
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 function SeasonList({ detail }: { detail: TitleDetail }) {
-  const seasons = detail.seasons ?? [];
-  const [active, setActive] = useState(seasons[0]?.number ?? 0);
-  const current = seasons.find((s) => s.number === active) ?? seasons[0];
+  const seasons = detail.seasons ?? []
+  const [active, setActive] = useState(seasons[0]?.number ?? 0)
+  const current = seasons.find((s) => s.number === active) ?? seasons[0]
 
   return (
     <>
@@ -387,40 +324,31 @@ function SeasonList({ detail }: { detail: TitleDetail }) {
             type="button"
             onClick={() => setActive(season.number)}
             className={[
-              "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
+              'rounded-lg border px-3 py-1.5 text-sm font-medium transition',
               season.number === active
-                ? "border-accent bg-accent/10 text-accent"
-                : "border-line bg-surface text-muted hover:text-ink",
-            ].join(" ")}
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-line bg-surface text-muted hover:text-ink',
+            ].join(' ')}
           >
-            {season.number > 0 ? `Temporada ${season.number}` : "Avulsos"}
+            {season.number > 0 ? `Temporada ${season.number}` : 'Avulsos'}
           </button>
         ))}
       </div>
       <FileList files={current?.episodes ?? []} />
     </>
-  );
+  )
 }
 
 // Containers e codecs que o navegador abre. Serve para escolher, entre os
 // arquivos de um mesmo título, qual o play deve abrir.
-const playableExts = [".mp4", ".m4v", ".webm", ".mov"];
-const unplayableCodecs = [
-  "hevc",
-  "h265",
-  "vc1",
-  "mpeg2video",
-  "ac3",
-  "eac3",
-  "dts",
-  "truehd",
-];
+const playableExts = ['.mp4', '.m4v', '.webm', '.mov']
+const unplayableCodecs = ['hevc', 'h265', 'vc1', 'mpeg2video', 'ac3', 'eac3', 'dts', 'truehd']
 
 function playsInBrowser(file: FileInfo): boolean {
-  if (!playableExts.includes(file.ext.toLowerCase())) return false;
+  if (!playableExts.includes(file.ext.toLowerCase())) return false
   return ![file.vcodec, file.acodec]
     .filter(Boolean)
-    .some((codec) => unplayableCodecs.includes(codec!.toLowerCase()));
+    .some((codec) => unplayableCodecs.includes(codec!.toLowerCase()))
 }
 
 /** Converte os arquivos do álbum na fila do player. */
@@ -432,18 +360,18 @@ function albumTracks(detail: TitleDetail): Track[] {
     album: detail.name,
     poster: detail.poster_url,
     duration: file.duration,
-  }));
+  }))
 }
 
 /** Faixas de um álbum: clicar toca no mini player e enfileira o resto. */
 function TrackList({ detail }: { detail: TitleDetail }) {
-  const player = usePlayer();
-  const tracks = albumTracks(detail);
+  const player = usePlayer()
+  const tracks = albumTracks(detail)
 
   return (
     <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
       {detail.files.map((file, i) => {
-        const isCurrent = player.current?.id === file.id;
+        const isCurrent = player.current?.id === file.id
         return (
           <li key={file.id}>
             <button
@@ -453,55 +381,41 @@ function TrackList({ detail }: { detail: TitleDetail }) {
             >
               <span
                 className={[
-                  "grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-medium",
-                  isCurrent
-                    ? "bg-accent text-accent-ink"
-                    : "bg-elev text-muted",
-                ].join(" ")}
+                  'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-medium',
+                  isCurrent ? 'bg-accent text-accent-ink' : 'bg-elev text-muted',
+                ].join(' ')}
               >
-                {isCurrent && player.playing ? (
-                  <PauseIcon />
-                ) : (
-                  (file.track ?? i + 1)
-                )}
+                {isCurrent && player.playing ? <PauseIcon /> : (file.track ?? i + 1)}
               </span>
               <span className="min-w-0 flex-1">
-                <span
-                  className={[
-                    "block truncate text-sm",
-                    isCurrent ? "text-accent" : "",
-                  ].join(" ")}
-                >
+                <span className={['block truncate text-sm', isCurrent ? 'text-accent' : ''].join(' ')}>
                   {file.name}
                 </span>
                 <span className="block text-xs text-muted">
-                  {[detail.artist, humanDuration(file.duration)]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {[detail.artist, humanDuration(file.duration)].filter(Boolean).join(' · ')}
                 </span>
               </span>
             </button>
           </li>
-        );
+        )
       })}
     </ul>
-  );
+  )
 }
 
 function FileList({ files }: { files: FileInfo[] }) {
-  const disp = useDisponibilidade();
-  const hibrido = disp.hibrido;
-  if (files.length === 0) return null;
+  const disp = useDisponibilidade()
+  const hibrido = disp.hibrido
+  if (files.length === 0) return null
 
   return (
     <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
       {files.map((file) => {
-        const percent =
-          file.duration > 0 ? ((file.position ?? 0) / file.duration) * 100 : 0;
+        const percent = file.duration > 0 ? ((file.position ?? 0) / file.duration) * 100 : 0
         const label =
           file.season || file.episode
-            ? `${file.episode ? `E${String(file.episode).padStart(2, "0")} · ` : ""}${file.name}`
-            : file.name;
+            ? `${file.episode ? `E${String(file.episode).padStart(2, '0')} · ` : ''}${file.name}`
+            : file.name
 
         return (
           <li key={file.id} className="relative">
@@ -528,45 +442,35 @@ function FileList({ files }: { files: FileInfo[] }) {
                 <p className="text-xs text-muted">
                   {[
                     humanDuration(file.duration),
-                    file.height ? `${file.height}p` : "",
+                    file.height ? `${file.height}p` : '',
                     file.vcodec || file.acodec,
                     humanSize(file.size),
-                    file.finished ? "assistido" : "",
+                    file.finished ? 'assistido' : '',
                     disp.naNuvem
                       ? disp.tocaArquivo(file.localizacao)
-                        ? ""
-                        : "no Mac, indisponível"
+                        ? ''
+                        : 'no Mac, indisponível'
                       : soNaNuvem(file.localizacao)
                         ? hibrido
-                          ? "na nuvem"
-                          : "na nuvem, indisponível"
-                        : file.localizacao === "ambos"
-                          ? "no Mac e na nuvem"
-                          : "",
+                          ? 'na nuvem'
+                          : 'na nuvem, indisponível'
+                        : file.localizacao === 'ambos'
+                          ? 'no Mac e na nuvem'
+                          : '',
                   ]
                     .filter(Boolean)
-                    .join(" · ")}
-                  {file.preparo_nuvem === "preparando" ? (
+                    .join(' · ')}
+                  {file.preparo_nuvem === 'preparando' ? (
                     <span className="ml-1.5 inline-flex items-center gap-1 text-accent">
-                      ·{" "}
-                      <NuvemIcon estado="processando" className="h-3.5 w-3.5" />{" "}
-                      preparando para todos os aparelhos
+                      · <NuvemIcon estado="processando" className="h-3.5 w-3.5" /> preparando para todos os aparelhos
                     </span>
-                  ) : file.preparo_nuvem === "pronto" ? (
-                    <span className="ml-1.5 text-ok">
-                      · pronto para tocar em qualquer aparelho
-                    </span>
-                  ) : file.preparo_nuvem === "falhou" ? (
-                    <span className="ml-1.5 text-danger">
-                      · o worker não conseguiu preparar
-                    </span>
+                  ) : file.preparo_nuvem === 'pronto' ? (
+                    <span className="ml-1.5 text-ok">· pronto para tocar em qualquer aparelho</span>
+                  ) : file.preparo_nuvem === 'falhou' ? (
+                    <span className="ml-1.5 text-danger">· o worker não conseguiu preparar</span>
                   ) : (
-                    file.media_type === "video" &&
-                    !playsInBrowser(file) && (
-                      <span className="ml-1.5 text-warn">
-                        · não toca no navegador
-                      </span>
-                    )
+                    file.media_type === 'video' &&
+                    !playsInBrowser(file) && <span className="ml-1.5 text-warn">· não toca no navegador</span>
                   )}
                 </p>
               </div>
@@ -584,119 +488,107 @@ function FileList({ files }: { files: FileInfo[] }) {
 
             {percent > 0 && (
               <div className="absolute inset-x-0 bottom-0 h-0.5 bg-elev">
-                <div
-                  className="h-full bg-accent"
-                  style={{ width: `${Math.min(100, percent)}%` }}
-                />
+                <div className="h-full bg-accent" style={{ width: `${Math.min(100, percent)}%` }} />
               </div>
             )}
           </li>
-        );
+        )
       })}
     </ul>
-  );
+  )
 }
 
 const confirmacoes: Partial<Record<AcaoDeNuvem, string>> = {
   liberar:
-    "Apagar a cópia deste arquivo no Mac? Ela só é apagada depois de o servidor provar que a da nuvem é idêntica. O item continua no catálogo e toca da nuvem no modo híbrido.",
+    'Apagar a cópia deste arquivo no Mac? Ela só é apagada depois de o servidor provar que a da nuvem é idêntica. O item continua no catálogo e toca da nuvem no modo híbrido.',
   remover:
-    "Apagar a cópia deste arquivo na nuvem? A do Mac continua. O bucket guarda a versão anterior por 30 dias.",
+    'Apagar a cópia deste arquivo na nuvem? A do Mac continua. O bucket guarda a versão anterior por 30 dias.',
   apagar:
-    "Apagar este arquivo DE VEZ? Ele só existe na nuvem: sai do bucket, do catálogo e leva junto as miniaturas, legendas e a versão preparada. O progresso de quem assistia se perde. O bucket ainda guarda a versão anterior do original por 30 dias, recuperável pelo console da AWS.",
-};
+    'Apagar este arquivo DE VEZ? Ele só existe na nuvem: sai do bucket, do catálogo e leva junto as miniaturas, legendas e a versão preparada. O progresso de quem assistia se perde. O bucket ainda guarda a versão anterior do original por 30 dias, recuperável pelo console da AWS.',
+}
+
+// Na instância cloud o mesmo botão apaga a cópia do bucket; se o Mac tiver o
+// arquivo no disco, ele continua lá (o Mac nota na reconciliação seguinte).
+const confirmacaoNaNuvem =
+  'Apagar este arquivo da nuvem? Ele sai do bucket e deste catálogo, com as miniaturas, legendas e a versão preparada. Se o Mac tiver uma cópia no disco, ela continua lá. O bucket guarda a versão anterior do original por 30 dias.'
 
 /** Onde o arquivo mora e o que dá para fazer com ele. Só o administrador
  *  move arquivos, e só no híbrido: no local, nada fala com a nuvem. */
 function AcoesDeNuvem({ file }: { file: FileInfo }) {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const hibrido = useHibrido();
-  const { data: user } = useQuery({ queryKey: ["me"], queryFn: api.me });
-  const [pedido, setPedido] = useState<AcaoDeNuvem | null>(null);
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const hibrido = useHibrido()
+  const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.me })
+  const [pedido, setPedido] = useState<AcaoDeNuvem | null>(null)
   // O pedido vale até o servidor mudar a localização do arquivo: daí em
   // diante quem diz o estado é ela (enviando, baixando, ambos…).
-  useEffect(() => setPedido(null), [file.localizacao]);
+  useEffect(() => setPedido(null), [file.localizacao])
   const acao = useMutation({
     mutationFn: (a: AcaoDeNuvem) => api.acaoDeNuvem(file.id, a),
     onSuccess: (_, a) => {
-      setPedido(a);
-      if (a === "apagar") {
+      setPedido(a)
+      if (a === 'apagar') {
         // Se era o único arquivo do título, o título some junto: volta ao
         // início em vez de parar numa página que não existe mais.
         const titulo = queryClient
-          .getQueriesData<TitleDetail>({ queryKey: ["title"] })
+          .getQueriesData<TitleDetail>({ queryKey: ['title'] })
           .map(([, d]) => d)
-          .find(
-            (d) =>
-              d &&
-              [
-                ...d.files,
-                ...(d.seasons ?? []).flatMap((t) => t.episodes),
-              ].some((f) => f.id === file.id),
-          );
-        const arquivos = titulo
-          ? titulo.files.length +
-            (titulo.seasons ?? []).reduce((n, t) => n + t.episodes.length, 0)
-          : 0;
+          .find((d) => d && [...d.files, ...(d.seasons ?? []).flatMap((t) => t.episodes)].some((f) => f.id === file.id))
+        const arquivos = titulo ? titulo.files.length + (titulo.seasons ?? []).reduce((n, t) => n + t.episodes.length, 0) : 0
         window.setTimeout(() => {
-          void queryClient.invalidateQueries();
-          if (arquivos <= 1) navigate("/");
-        }, 2500);
-        return;
+          void queryClient.invalidateQueries()
+          if (arquivos <= 1) navigate('/')
+        }, 2500)
+        return
       }
       // O motor trabalha em segundo plano: as tarefas passam a ser vigiadas
       // pelo cartão de envios, e a página volta a olhar o título.
-      void queryClient.invalidateQueries({ queryKey: ["sincronizacao"] });
-      window.setTimeout(
-        () => void queryClient.invalidateQueries({ queryKey: ["title"] }),
-        1500,
-      );
+      void queryClient.invalidateQueries({ queryKey: ['sincronizacao'] })
+      window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['title'] }), 1500)
     },
-  });
-  const estado = useModoNuvem();
-  if (!user?.is_admin || !hibrido || estado?.papel === "nuvem") return null;
+  })
+  const estado = useModoNuvem()
+  const naNuvem = estado?.papel === 'nuvem'
+  if (!user?.is_admin || !hibrido) return null
 
-  const loc = file.localizacao ?? "local";
-  const opcoes: { acao: AcaoDeNuvem; rotulo: string; perigo?: boolean }[] =
-    loc === "local"
-      ? [{ acao: "enviar", rotulo: "Enviar à nuvem" }]
-      : loc === "nuvem"
+  const loc = file.localizacao ?? 'local'
+  const opcoes: { acao: AcaoDeNuvem; rotulo: string; perigo?: boolean }[] = naNuvem
+    ? // Na instância cloud: só apagar o que está no bucket.
+      soNaNuvem(loc) || loc === 'ambos'
+      ? [{ acao: 'apagar', rotulo: 'Apagar da nuvem', perigo: true }]
+      : []
+    : loc === 'local'
+      ? [{ acao: 'enviar', rotulo: 'Enviar à nuvem' }]
+      : loc === 'nuvem'
         ? [
-            { acao: "fixar", rotulo: "Disponível offline" },
-            { acao: "apagar", rotulo: "Apagar da nuvem", perigo: true },
+            { acao: 'fixar', rotulo: 'Disponível offline' },
+            { acao: 'apagar', rotulo: 'Apagar da nuvem', perigo: true },
           ]
-        : loc === "ambos"
+        : loc === 'ambos'
           ? [
-              { acao: "liberar", rotulo: "Liberar espaço", perigo: true },
-              { acao: "remover", rotulo: "Tirar da nuvem", perigo: true },
+              { acao: 'liberar', rotulo: 'Liberar espaço', perigo: true },
+              { acao: 'remover', rotulo: 'Tirar da nuvem', perigo: true },
             ]
-          : [];
+          : []
 
   if (opcoes.length === 0 || pedido) {
-    const texto =
-      pedido === "apagar"
-        ? "apagando…"
-        : pedido
-          ? "na fila"
-          : loc === "enviando"
-            ? "enviando…"
-            : loc === "baixando"
-              ? "baixando…"
-              : "";
-    if (!texto) return null;
-    const icone =
-      loc === "enviando"
-        ? "enviando"
-        : loc === "baixando"
-          ? "baixando"
-          : "processando";
+    const texto = pedido === 'apagar'
+      ? 'apagando…'
+      : pedido
+      ? 'na fila'
+      : loc === 'enviando'
+        ? 'enviando…'
+        : loc === 'baixando'
+          ? 'baixando…'
+          : ''
+    if (!texto) return null
+    const icone = loc === 'enviando' ? 'enviando' : loc === 'baixando' ? 'baixando' : 'processando'
     return (
       <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
         <NuvemIcon estado={icone} className="text-accent" />
         {texto}
       </span>
-    );
+    )
   }
 
   return (
@@ -708,21 +600,19 @@ function AcoesDeNuvem({ file }: { file: FileInfo }) {
           disabled={acao.isPending}
           title={acao.isError ? (acao.error as Error).message : undefined}
           onClick={() => {
-            const aviso = confirmacoes[o.acao];
-            if (aviso && !window.confirm(aviso)) return;
-            acao.mutate(o.acao);
+            const aviso = naNuvem && o.acao === 'apagar' ? confirmacaoNaNuvem : confirmacoes[o.acao]
+            if (aviso && !window.confirm(aviso)) return
+            acao.mutate(o.acao)
           }}
           className={[
-            "rounded-md px-2 py-1 text-xs font-medium transition disabled:opacity-50",
-            o.perigo
-              ? "text-muted hover:bg-danger/10 hover:text-danger"
-              : "text-muted hover:bg-elev hover:text-ink",
-          ].join(" ")}
+            'rounded-md px-2 py-1 text-xs font-medium transition disabled:opacity-50',
+            o.perigo ? 'text-muted hover:bg-danger/10 hover:text-danger' : 'text-muted hover:bg-elev hover:text-ink',
+          ].join(' ')}
         >
           {o.rotulo}
         </button>
       ))}
       {acao.isError && <span className="text-xs text-danger">falhou</span>}
     </div>
-  );
+  )
 }

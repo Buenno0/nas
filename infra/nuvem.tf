@@ -71,6 +71,15 @@ resource "aws_iam_role_policy" "nuvem" {
         Resource = "arn:aws:ecs:${var.regiao}:${data.aws_caller_identity.atual.account_id}:service/${aws_ecs_cluster.ozymandias.name}/ozymandias-worker"
       },
       {
+        # "Apagar da nuvem" pela instância cloud: o original e os derivados.
+        # O Mac nota o sumiço na reconciliação e ajusta o catálogo dele.
+        Sid    = "ApagarDaNuvem"
+        Effect = "Allow"
+        Action = ["s3:DeleteObject"]
+        Resource = ["${aws_s3_bucket.midia.arn}/bibliotecas/*",
+        "${aws_s3_bucket.midia.arn}/derivados/*"]
+      },
+      {
         # Tela técnica da instância cloud: só leitura de configuração.
         Sid      = "InspecionarBucket"
         Effect   = "Allow"

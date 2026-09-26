@@ -31,6 +31,10 @@ func (s *Server) handleReconciliar(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAcaoDeNuvem(w http.ResponseWriter, r *http.Request) {
 	id := atoi64(r.PathValue("id"))
+	if s.opts.NaNuvem && r.PathValue("acao") != "apagar" {
+		writeError(w, http.StatusForbidden, "só o Mac move arquivos entre o disco e a nuvem")
+		return
+	}
 	var err error
 	switch r.PathValue("acao") {
 	case "enviar":
