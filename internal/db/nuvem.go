@@ -396,3 +396,65 @@ func (d *DB) ApagaSoDaNuvem(ctx context.Context, id int64) (bool, error) {
 	n, _ := res.RowsAffected()
 	return n > 0, nil
 }
+
+// UsoDaLocalizacao é quanto do acervo mora em cada lugar.
+type UsoDaLocalizacao struct {
+	Localizacao string `json:"localizacao"`
+	Bytes       int64  `json:"bytes"`
+	Arquivos    int64  `json:"arquivos"`
+}
+
+// UsoDaBiblioteca soma, por biblioteca, o total e o que já tem cópia no bucket.
+type UsoDaBiblioteca struct {
+	ID         int64  `json:"id"`
+	Nome       string `json:"nome"`
+	Kind       Kind   `json:"kind"`
+	Bytes      int64  `json:"bytes"`
+	BytesNuvem int64  `json:"bytes_nuvem"`
+}
+
+func (d *DB) UsoPorLocalizacao(ctx context.Context) ([]UsoDaLocalizacao, error) {
+	rows, err := d.QueryContext(ctx, `
+		SELECT localizacao, IFNULL(SUM(size), 0), COUNT(*) FROM media_files GROUP BY localizacao`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UsoDaLocalizacao{}
+	for rows.Next() {
+		var u UsoDaLocalizacao
+		if err := rows.Scan(&u.Localizacao, &u.Bytes, &u.Arquivos); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) UsoPorBiblioteca(ctx context.Context) ([]UsoDaBiblioteca, error) {
+	rows, err := d.QueryContext(ctx, `
+		SELECT l.id, l.name, l.kind,
+		       IFNULL(SUM(f.size), 0),
+		       IFNULL(SUM(CASE WHEN f.localizacao IN ('ambos', 'nuvem') THEN f.size ELSE 0 END), 0)
+		  FROM libraries l LEFT JOIN media_files f ON f.library_id = l.id
+		 GROUP BY l.id ORDER BY l.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UsoDaBiblioteca{}
+	for rows.Next() {
+		var u UsoDaBiblioteca
+		if err := rows.Scan(&u.ID, &u.Nome, &u.Kind, &u.Bytes, &u.BytesNuvem); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// ContaDerivados diz quantos arquivos têm derivados do worker, e quantos são.
+func (d *DB) ContaDerivados(ctx context.Context) (arquivos, derivados int64, err error) {
+	err = d.QueryRowContext(ctx, `SELECT COUNT(DISTINCT media_file_id), COUNT(*) FROM derivados`).Scan(&arquivos, &derivados)
+	return
+}

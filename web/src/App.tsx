@@ -10,6 +10,8 @@ import { Title } from "./pages/Title";
 import { Settings } from "./pages/Settings";
 import { Metrics } from "./pages/Metrics";
 import { Tecnico } from "./pages/Tecnico";
+import { Enviar } from "./pages/Enviar";
+import { Armazenamento } from "./pages/Armazenamento";
 import { Artista, Artistas } from "./pages/Artistas";
 import { Colecao, Colecoes } from "./pages/Colecoes";
 import { Watch } from "./pages/Watch";
@@ -76,6 +78,8 @@ export default function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/metricas" element={<Metrics />} />
                 <Route path="/tecnico" element={<Tecnico />} />
+                <Route path="/enviar" element={<Enviar />} />
+                <Route path="/armazenamento" element={<Armazenamento />} />
                 <Route path="/ruinas" element={<Ruinas />} />
                 {/* Rota desconhecida dentro do app: o servidor já devolve a tela
                   de 404 no carregamento direto, isto cobre a navegação interna. */}

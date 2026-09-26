@@ -403,4 +403,3 @@ func (s *Server) preparoNaNuvem(ctx context.Context, f db.FileInfo) string {
 	}
 	return ""
 }
-

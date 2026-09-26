@@ -262,3 +262,36 @@ body {
 @keyframes nv-impacto { 0% { opacity: .7; transform: scale(.3); } 100% { opacity: 0; transform: scale(2.4); } }
 @keyframes nv-dispersa-e { to { opacity: 0; transform: translateX(-60%) scaleY(.6); } }
 @keyframes nv-dispersa-d { to { opacity: 0; transform: translateX(60%) scaleY(.6); } }
+
+/* Tela de envio (canvas "Enviar à nuvem · Céu aberto" + órbita da Constelação). */
+.ce-estrela { animation: ce-cintila 7s ease-in-out infinite; }
+.ce-nevoa-a { animation: ce-corre 140s linear infinite; }
+.ce-nevoa-b { animation: ce-corre 90s linear infinite; }
+.ce-respira { animation: ce-respira 5.5s ease-in-out infinite; }
+.ce-acorda { animation: ce-acorda 1.8s ease-in-out infinite; }
+.ce-orbita { transform-origin: 0 0; animation: ce-gira 70s linear infinite; }
+.ce-contra { transform-origin: 0 0; animation: ce-gira 70s linear infinite reverse; }
+.ce-parado { animation-play-state: paused !important; }
+.ce-satelite { transition: transform 1.2s cubic-bezier(.5,0,.2,1), opacity .9s ease .35s; }
+.ce-fio { animation: ce-fio 1.6s linear infinite; }
+.ce-gota { animation: ce-gota 2.6s cubic-bezier(.35,0,.55,1) infinite; }
+.ce-centelha { animation: ce-centelha 1.9s steps(1, end) infinite; }
+.ce-garoa { animation: ce-garoa .9s linear infinite; }
+.ce-chuva-ouro { opacity: 0; animation: ce-chuva-ouro 1.4s ease-in forwards; }
+.ce-coluna { transition: transform .5s cubic-bezier(.2,.8,.2,1); }
+.ce-zona { transition: border-color .3s ease, background-color .3s ease, transform .5s cubic-bezier(.2,.8,.2,1); }
+@keyframes ce-cintila { 0%, 100% { opacity: .18; } 50% { opacity: .8; } }
+@keyframes ce-corre { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes ce-respira { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes ce-acorda { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-10px) scale(1.035); } }
+@keyframes ce-gira { to { transform: rotate(360deg); } }
+@keyframes ce-fio { to { stroke-dashoffset: -24; } }
+@keyframes ce-gota { 0% { opacity: 0; transform: translateY(0) scale(.6); } 12% { opacity: .95; } 80% { opacity: .75; } 100% { opacity: 0; transform: translateY(-190px) scale(1.1); } }
+@keyframes ce-centelha { 0% { opacity: 0; } 6% { opacity: .9; } 9% { opacity: 0; } 13% { opacity: .6; } 16%, 100% { opacity: 0; } }
+@keyframes ce-garoa { from { transform: translateY(-6px); opacity: 0; } 30% { opacity: .8; } to { transform: translateY(26px); opacity: 0; } }
+@keyframes ce-chuva-ouro { from { transform: translateY(0); opacity: 0; } 20% { opacity: .9; } to { transform: translateY(110px); opacity: 0; } }
+.arm-onda { animation: arm-onda 6s linear infinite; }
+.arm-onda-2 { animation: arm-onda 9s linear infinite reverse; }
+.arm-sobe { transition: transform 1.2s cubic-bezier(.2,.8,.2,1); }
+.arm-barra { transition: width 1s cubic-bezier(.2,.8,.2,1); }
+@keyframes arm-onda { from { transform: translateX(0); } to { transform: translateX(-200px); } }

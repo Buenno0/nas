@@ -211,6 +211,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	// Tela técnica: só leitura, para diagnóstico.
 	mux.Handle("GET /api/tecnico", s.adminOnly(s.handleTecnico))
 	mux.Handle("GET /api/tecnico/custo", s.adminOnly(s.handleCusto))
+	mux.Handle("GET /api/armazenamento", s.adminOnly(s.handleArmazenamento))
 	mux.Handle("GET /api/tecnico/diario", s.adminOnly(s.handleDiario))
 	mux.Handle("GET /api/tecnico/eventos", s.adminOnly(s.handleDiarioEventos))
 

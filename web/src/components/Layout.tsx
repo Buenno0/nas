@@ -11,6 +11,7 @@ import { Mark } from './Mark'
 import {
   ActivityIcon,
   ChipIcon,
+  DiskIcon,
   ChevronRight,
   NuvemIcon,
   FilmIcon,
@@ -59,7 +60,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <MiniPlayer />
       {/* Em Configurações o cartão completo já está na página. */}
-      {location.pathname !== '/settings' && <CartaoDeEnvios />}
+      {location.pathname !== '/settings' && location.pathname !== '/enviar' && <CartaoDeEnvios />}
       <MobileNav libraries={libraries ?? []} />
     </div>
   )
@@ -152,6 +153,11 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
         {admin && (
           <NavLink to="/metricas" className={navClass}>
             <ActivityIcon /> Métricas
+          </NavLink>
+        )}
+        {admin && (
+          <NavLink to="/armazenamento" className={navClass}>
+            <DiskIcon /> Armazenamento
           </NavLink>
         )}
         {admin && (

@@ -469,6 +469,13 @@ export interface RespostaCusto {
   do_cache?: boolean
 }
 
+export interface Armazenamento {
+  por_localizacao: { localizacao: string; bytes: number; arquivos: number }[]
+  por_biblioteca: { id: number; nome: string; kind: 'movie' | 'tv' | 'music' | 'photo'; bytes: number; bytes_nuvem: number }[]
+  derivados: { arquivos: number; total: number }
+  disco?: { livre: number; total: number; reserva: number }
+}
+
 export const api = {
   me: () => request<User>('/api/auth/me'),
   login: (username: string, password: string, remember = true) =>
@@ -550,6 +557,7 @@ export const api = {
   modoEventsUrl: () => '/api/modo/events',
 
   sincronizacao: () => request<EstadoSincronizacao>('/api/sincronizacao'),
+  armazenamento: () => request<Armazenamento>('/api/armazenamento'),
   tecnico: (atualizar = false) => request<Tecnico>(`/api/tecnico${atualizar ? '?atualizar=1' : ''}`),
   custo: (atualizar = false) => request<RespostaCusto>(`/api/tecnico/custo${atualizar ? '?atualizar=1' : ''}`),
   diario: (f: { tipo?: string; upload?: number; antes?: number; limite?: number } = {}) =>
