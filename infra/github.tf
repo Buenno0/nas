@@ -34,12 +34,16 @@ resource "aws_iam_role" "github" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          # Só push na master: PR de fork, outro branch ou tag não entram. O
-          # formato imutável (com os IDs numéricos) não muda se a repo for
-          # renomeada ou recriada com o mesmo nome por outra pessoa.
+        }
+        # Só a master (botão "Run workflow") e as tags de versão (v1.2…): PR
+        # de fork e outros branches não entram. O formato imutável (com os IDs
+        # numéricos) não muda se a repo for renomeada ou recriada por outro.
+        StringLike = {
           "token.actions.githubusercontent.com:sub" = compact([
             "repo:${var.repo_github}:ref:refs/heads/master",
+            "repo:${var.repo_github}:ref:refs/tags/v*",
             var.repo_github_imutavel == "" ? "" : "${var.repo_github_imutavel}:ref:refs/heads/master",
+            var.repo_github_imutavel == "" ? "" : "${var.repo_github_imutavel}:ref:refs/tags/v*",
           ])
         }
       }

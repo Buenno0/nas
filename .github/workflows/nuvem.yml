@@ -1,16 +1,15 @@
-# Publica a imagem e troca a instância cloud a cada push na master.
+# Publica a imagem e troca a instância cloud: por tag v* ou pelo botão.
 # Configure no GitHub (Settings → Secrets and variables → Actions → Variables):
 #   AWS_ROLE_ARN   tofu -chdir=infra output -raw github_role_arn
 #   BUCKET_BUILD   tofu -chdir=infra output -raw bucket_build
 name: nuvem
 
 on:
+  # Deploy só quando você quiser: uma tag de versão (git tag v1.2 && git
+  # push origin v1.2) ou o botão "Run workflow" na aba Actions. Push comum
+  # na master não publica mais (cada deploy é um build no CodeBuild).
   push:
-    branches: [master]
-    paths-ignore:
-      - "**.md"
-      - "infra/**"
-      - "turno3-claro/**"
+    tags: ["v*"]
   workflow_dispatch:
 
 # Dois pushes seguidos: o segundo espera o primeiro, nunca rodam juntos.

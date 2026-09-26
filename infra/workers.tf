@@ -22,12 +22,21 @@ resource "aws_ecr_repository" "worker" {
 resource "aws_ecr_lifecycle_policy" "worker" {
   repository = aws_ecr_repository.worker.name
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "guarda só as 5 imagens mais recentes"
-      selection    = { tagStatus = "any", countType = "imageCountMoreThan", countNumber = 5 }
-      action       = { type = "expire" }
-    }]
+    rules = [
+      {
+        # O cache de camadas do build nunca expira pela regra geral.
+        rulePriority = 1
+        description  = "cache de build: guarda o último"
+        selection    = { tagStatus = "tagged", tagPrefixList = ["cache"], countType = "imageCountMoreThan", countNumber = 1 }
+        action       = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "guarda só as 5 imagens mais recentes"
+        selection    = { tagStatus = "any", countType = "imageCountMoreThan", countNumber = 5 }
+        action       = { type = "expire" }
+      },
+    ]
   })
 }
 

@@ -102,12 +102,12 @@ resource "aws_codebuild_project" "imagem" {
         pre_build = { commands = [
           "aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $${ECR_URL%%/*}",
         ] }
+        # Cache de camadas no próprio ECR (tag "cache"): o ffmpeg do Debian e
+        # os módulos Go não são baixados de novo a cada build — só muda o
+        # que mudou no código. Um build frio leva ~2 min; com cache, ~1.
         build = { commands = [
-          "docker build --build-arg VERSAO=$VERSAO -t $ECR_URL:$VERSAO -t $ECR_URL:latest .",
-        ] }
-        post_build = { commands = [
-          "docker push $ECR_URL:$VERSAO",
-          "docker push $ECR_URL:latest",
+          "docker buildx create --use --name construtor",
+          "docker buildx build --build-arg VERSAO=$VERSAO -t $ECR_URL:$VERSAO -t $ECR_URL:latest --cache-from type=registry,ref=$ECR_URL:cache --cache-to type=registry,ref=$ECR_URL:cache,mode=max,image-manifest=true,oci-mediatypes=true --push .",
         ] }
       }
     })

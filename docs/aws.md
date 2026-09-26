@@ -194,7 +194,15 @@ valendo.
 
 ## 7. Atualizar a nuvem depois de mudar o código
 
-A nuvem roda a imagem do último commit publicado. Depois de uma feature nova:
+A nuvem roda a imagem da última versão publicada. Push comum não publica: cada
+deploy é um build no CodeBuild (100 min grátis por mês, ~1 min por build).
+Para publicar, crie uma tag de versão:
+
+```bash
+git tag v1.3 && git push origin v1.3
+```
+
+ou use **Actions → nuvem → Run workflow** no GitHub. Sem o GitHub:
 
 ```bash
 git commit …                      # só o que está commitado vai
