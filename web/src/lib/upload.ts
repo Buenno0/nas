@@ -64,14 +64,44 @@ export async function enviar(
     if (!ativo()) controle.abort()
   }, 200)
 
+  // Um pedido de URLs por vez: as partes paralelas esperam o mesmo lote em
+  // vez de cada uma pedir 20 URLs quase iguais ao mesmo tempo.
   const urls = new Map<number, string>()
-  const urlDa = async (n: number) => {
-    if (!urls.has(n)) {
-      const lote = faltam.filter((m) => m >= n && !urls.has(m)).slice(0, URLS_POR_PEDIDO)
-      const { urls: novas } = await api.urlsDoUpload(upload.id, lote)
-      for (const [k, v] of Object.entries(novas)) urls.set(Number(k), v)
+  let pedindo: Promise<void> | null = null
+  const urlDa = async (n: number): Promise<string> => {
+    while (!urls.has(n)) {
+      if (!pedindo) {
+        const lote = faltam.filter((m) => m >= n && !urls.has(m)).slice(0, URLS_POR_PEDIDO)
+        pedindo = api
+          .urlsDoUpload(upload.id, lote)
+          .then(({ urls: novas }) => {
+            for (const [k, v] of Object.entries(novas)) urls.set(Number(k), v)
+          })
+          .finally(() => {
+            pedindo = null
+          })
+      }
+      await pedindo
     }
     return urls.get(n)!
+  }
+
+  // Uma parte que cai no meio (Wi-Fi que oscila, celular trocando de antena)
+  // tenta de novo antes de derrubar o arquivo inteiro. O kill switch não:
+  // ele pausa na hora. A URL assinada vale 1 h, então é reaproveitada.
+  const esperas = [2000, 5000, 10000]
+  const enviaComTentativas = async (n: number) => {
+    for (let tentativa = 0; ; tentativa++) {
+      try {
+        return await enviaParte(n, await urlDa(n))
+      } catch (e) {
+        if (e instanceof PausadoPeloModo || controle.signal.aborted || tentativa >= esperas.length) throw e
+        emVoo.delete(n)
+        avisa()
+        api.anotarEnvio(upload.id, { tipo: 'erro', erro: `parte ${n}: ${(e as Error).message}; tentando de novo (${tentativa + 1}/${esperas.length})` })
+        await new Promise((r) => window.setTimeout(r, esperas[tentativa]))
+      }
+    }
   }
 
   const enviaParte = (n: number, url: string) =>
@@ -105,7 +135,7 @@ export async function enviar(
     while (proxima < faltam.length) {
       if (controle.signal.aborted) throw new PausadoPeloModo()
       const n = faltam[proxima++]
-      const etag = await enviaParte(n, await urlDa(n))
+      const etag = await enviaComTentativas(n)
       emVoo.delete(n)
       feitas.set(n, etag)
       enviados += tamanhoDa(n)

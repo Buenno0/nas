@@ -1,7 +1,8 @@
 // Tela de envio: o céu inteiro recebe os arquivos (canvas "Céu aberto") e cada
-// arquivo do lote vira uma nuvem pequena em órbita da nuvem-mãe (a órbita da
-// "Constelação"). O motor é o mesmo de sempre (lib/envios): um envio que
-// começa aqui continua no cartão flutuante em qualquer outra tela.
+// arquivo do lote vira um fio de luz que sobe do chão até a nuvem — chuva ao
+// contrário: as gotas daquele arquivo sobem pelo fio na velocidade dele. O
+// motor é o mesmo de sempre (lib/envios): um envio que começa aqui continua
+// no cartão flutuante em qualquer outra tela.
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
@@ -14,8 +15,6 @@ import { UploadIcon } from '../components/icons'
 
 const CUMULO = 'M70 170 C30 170 20 130 50 118 C44 84 84 66 110 82 C120 46 170 36 196 64 C214 30 280 30 292 78 C330 70 364 96 352 130 C380 140 376 172 344 172 Z'
 const CUMULO_BORDA = 'M50 118 C44 84 84 66 110 82 C120 46 170 36 196 64 C214 30 280 30 292 78 C330 70 364 96 352 130'
-const PEQUENA = 'M-40 18 C-58 18 -62 2 -50 -4 C-52 -18 -36 -26 -26 -18 C-22 -34 0 -38 10 -24 C18 -38 44 -36 46 -16 C60 -18 70 -4 62 10 C72 14 68 20 58 20 Z'
-const PEQUENA_BORDA = 'M-50 -4 C-52 -18 -36 -26 -26 -18 C-22 -34 0 -38 10 -24 C18 -38 44 -36 46 -16 C60 -18 70 -4 62 10'
 const CHAVE_BIBLIOTECA = 'nas-enviar-biblioteca'
 
 // Estrelas e gotas em posições estáveis: o céu não "pula" a cada render.
@@ -149,25 +148,27 @@ export function Enviar() {
   const bordaMae = estado === 'arrastando' ? 0.7 : concluido ? 0.9 : pausado ? 0.22 : 0.18 + 0.42 * f
   const brilho = estado === 'arrastando' ? 0.16 : enviando ? 0.04 + 0.16 * f : concluido ? 0.2 : 0.03
 
-  // Satélites: um por arquivo do lote, em duas órbitas alternadas.
-  const maior = Math.max(1, ...doLote.map((l) => l.total))
-  const satelites = doLote.map((l, i) => {
+  // Fios: um por arquivo do lote, espalhados sob a nuvem. O fio acende com o
+  // progresso; as gotas sobem na velocidade daquele arquivo; ao terminar, o
+  // fio se recolhe para dentro da nuvem.
+  const vao = Math.min(84, 520 / Math.max(1, doLote.length))
+  const fios = doLote.map((l, i) => {
     const p = l.estado === 'pronto' ? 1 : l.total > 0 ? l.feitos / l.total : 0
-    const ang = (i / Math.max(1, doLote.length)) * Math.PI * 2 - Math.PI / 2 + 0.35
-    const raioOrbita = i % 2 === 0 ? 300 : 225
+    const bps = velocidades.get(l.chave) ?? 0
+    const pronto = l.estado === 'pronto'
     return {
       l,
       p,
-      x: Math.cos(ang) * raioOrbita,
-      y: Math.sin(ang) * raioOrbita * 0.62,
-      escala: 0.42 + 0.5 * Math.sqrt(l.total / maior),
-      pronto: l.estado === 'pronto',
-      cor: l.estado === 'erro' ? 'var(--danger)' : l.estado === 'pronto' ? 'var(--ok)' : pausado ? 'var(--muted)' : 'var(--accent)',
+      x: (i - (doLote.length - 1) / 2) * vao,
+      pronto,
+      // de 3,4 s (parado) a 1 s (rápido): o fio de quem sobe mais depressa corre mais
+      dur: bps > 0 ? Math.max(1, 3.4 - Math.min(2.4, bps / 6e6)) : 3.4,
+      cor: l.estado === 'erro' ? 'var(--danger)' : pronto ? 'var(--ok)' : pausado ? 'var(--muted)' : 'var(--accent)',
     }
   })
 
   const acelera = 1 - 0.7 * f
-  const quantasGotas = enviando ? 8 + Math.round(16 * f) : pausado ? 10 : 0
+  const quantasGotas = fios.length > 0 ? 0 : enviando ? 8 + Math.round(16 * f) : pausado ? 10 : 0
   const gotas = Array.from({ length: quantasGotas }, (_, i) => ({
     x: -200 + ((i * 131) % 400),
     r: 1.8 + (i % 3) * 0.7,
@@ -179,7 +180,7 @@ export function Enviar() {
   const titulo = {
     vazio: 'Solte e deixe o céu levar',
     arrastando: 'Pode soltar',
-    enviando: doLote.length === 1 ? 'Subindo para a nuvem' : `${doLote.length} arquivos em órbita`,
+    enviando: doLote.length === 1 ? 'Subindo para a nuvem' : `${doLote.length} arquivos subindo`,
     pausado: 'Envio pausado',
     erro: 'Uma parte não subiu',
     concluido: 'Tudo na nuvem',
@@ -269,12 +270,6 @@ export function Enviar() {
               </radialGradient>
             </defs>
             <ellipse cx="0" cy="0" rx="330" ry="210" fill="url(#ce-brilho)" />
-            {satelites.length > 0 && (
-              <>
-                <ellipse cx="0" cy="0" rx="300" ry="186" fill="none" stroke="var(--line)" strokeDasharray="2 10" />
-                <ellipse cx="0" cy="0" rx="225" ry="140" fill="none" stroke="var(--line)" strokeOpacity={0.6} strokeDasharray="2 10" />
-              </>
-            )}
 
             {/* Nuvem-mãe */}
             <g style={{ transform: `scale(${escalaMae.toFixed(3)})`, transition: 'transform .7s cubic-bezier(.2,.8,.2,1)' }}>
@@ -305,30 +300,54 @@ export function Enviar() {
               </g>
             </g>
 
-            {/* Satélites em órbita; o texto não gira junto (contra-rotação). */}
-            <g className={`ce-orbita ${pausado ? 'ce-parado' : ''}`}>
-              {satelites.map((s) => (
-                <g
-                  key={s.l.chave}
-                  className="ce-satelite"
-                  style={{
-                    transform: s.pronto ? 'translate(0px, 0px) scale(.2)' : `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`,
-                    opacity: s.pronto ? 0 : 1,
-                  }}
-                >
-                  <line className={pausado ? '' : 'ce-fio'} x1="0" y1="0" x2={(-s.x).toFixed(1)} y2={(-s.y).toFixed(1)} stroke="var(--accent)" strokeOpacity={pausado ? 0.08 : 0.1 + 0.35 * s.p} strokeDasharray="3 9" />
-                  <g className={`ce-contra ${pausado ? 'ce-parado' : ''}`}>
-                    <g style={{ transform: `scale(${s.escala.toFixed(2)})` }}>
-                      <path d={PEQUENA} fill="var(--elev)" />
-                      <path d={PEQUENA_BORDA} fill="none" stroke={s.cor} strokeOpacity={0.2 + 0.8 * s.p} strokeWidth={2.2} strokeLinecap="round" />
-                    </g>
-                    <text y={Math.round(34 * s.escala + 20)} textAnchor="middle" fill="var(--muted)" className="font-mono" fontSize="12">
-                      {Math.round(s.p * 100)}%
-                    </text>
-                  </g>
-                </g>
-              ))}
-            </g>
+            {/* Fios de luz: do chão (y=210) até a base da nuvem (y≈40). */}
+            {fios.map((fio) => (
+              <g key={fio.l.chave} style={{ opacity: fio.pronto ? 0 : 1, transition: 'opacity .9s ease .5s' }}>
+                <line
+                  x1={fio.x}
+                  y1={210}
+                  x2={fio.x * 0.35}
+                  y2={fio.pronto ? 40 : 46}
+                  stroke={fio.cor}
+                  strokeOpacity={pausado ? 0.12 : 0.12 + 0.5 * fio.p}
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                  style={{ transition: 'stroke-opacity .6s ease' }}
+                />
+                {/* o trecho já enviado brilha, crescendo de baixo para cima */}
+                <line
+                  x1={fio.x}
+                  y1={210}
+                  x2={fio.x + (fio.x * 0.35 - fio.x) * fio.p}
+                  y2={210 - (210 - 46) * fio.p}
+                  stroke={fio.cor}
+                  strokeOpacity={pausado ? 0.25 : 0.85}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  style={{ transition: 'all .5s cubic-bezier(.2,.8,.2,1)', filter: pausado ? 'none' : 'drop-shadow(0 0 4px var(--accent))' }}
+                />
+                {!fio.pronto &&
+                  [0, 1, 2].map((k) => (
+                    <circle
+                      key={k}
+                      className={`ce-fio-gota ${pausado ? 'ce-parado' : ''}`}
+                      r={k === 0 ? 2.4 : 1.7}
+                      fill={pausado ? 'var(--line)' : fio.cor}
+                      style={
+                        {
+                          '--x0': `${fio.x}px`,
+                          '--x1': `${(fio.x * 0.35).toFixed(1)}px`,
+                          animationDuration: `${fio.dur.toFixed(2)}s`,
+                          animationDelay: `-${((k * fio.dur) / 3).toFixed(2)}s`,
+                        } as React.CSSProperties
+                      }
+                    />
+                  ))}
+                <text x={fio.x} y={230} textAnchor="middle" fill="var(--muted)" className="font-mono" fontSize="11">
+                  {fio.pronto ? '✓' : `${Math.round(fio.p * 100)}%`}
+                </text>
+              </g>
+            ))}
 
             {/* Gotas que sobem até a nuvem */}
             {gotas.map((g, i) => (
