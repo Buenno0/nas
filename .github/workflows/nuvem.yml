@@ -29,16 +29,23 @@ jobs:
     env:
       AWS_REGION: us-east-1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
+      # As linhas da falha viram anotações: aparecem no resumo do run (e na
+      # API pública) sem precisar abrir o log, que exige login de admin.
       - name: testes
-        run: go test ./...
+        run: |
+          set -o pipefail
+          if ! go test ./... 2>&1 | tee /tmp/testes.log; then
+            grep -E -- '--- FAIL|^FAIL|_test\.go:[0-9]+|panic:' /tmp/testes.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-east-1
