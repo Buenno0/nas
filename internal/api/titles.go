@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nas/internal/auth"
@@ -109,6 +110,20 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		resp.NoDia = fotos
 	} else {
 		log.Printf("prateleira do dia: %v", err)
+	}
+
+	if porque, base := s.porqueVoceViu(ctx, user.ID); len(porque) > 0 {
+		resp.Rows = append(resp.Rows, homeRow{Key: "porque", Title: "Porque você viu " + base, Items: withImageURLs(porque)})
+	}
+	if terminar, err := s.db.ParaTerminar(ctx, user.ID, 20); err == nil && len(terminar) > 0 {
+		resp.Rows = append(resp.Rows, homeRow{Key: "terminar", Title: "Para terminar", Items: withImageURLs(terminar)})
+	} else if err != nil {
+		log.Printf("prateleira para terminar: %v", err)
+	}
+	if curtos, err := s.db.CabeEm(ctx, user.ID, 95*60, 20); err == nil && len(curtos) > 0 {
+		resp.Rows = append(resp.Rows, homeRow{Key: "curtos", Title: "Cabe em 1h30", Items: withImageURLs(curtos)})
+	} else if err != nil {
+		log.Printf("prateleira de curtos: %v", err)
 	}
 
 	if acaso, err := s.db.TitulosAoAcaso(ctx, user.ID, 20); err == nil && len(acaso) > 0 {
@@ -403,3 +418,45 @@ func (s *Server) preparoNaNuvem(ctx context.Context, f db.FileInfo) string {
 	}
 	return ""
 }
+
+// Recomendações do TMDB valem uma semana; depois disso a Home ainda mostra
+// as guardadas e busca novas em segundo plano (nunca espera o TMDB).
+const validadeDasRecomendacoes = 7 * 24 * time.Hour
+
+var buscandoRecomendacao sync.Map // title_id → busca em andamento
+
+// porqueVoceViu monta "Porque você viu X" a partir do último título que a
+// pessoa terminou: as recomendações do TMDB que existem no acervo.
+func (s *Server) porqueVoceViu(ctx context.Context, userID int64) ([]db.TitleCard, string) {
+	id, nome, kind, tmdbID, err := s.db.UltimoTerminado(ctx, userID)
+	if err != nil {
+		return nil, ""
+	}
+	ids, em, ok := s.db.Recomendacoes(ctx, id)
+	if !ok || time.Since(em) > validadeDasRecomendacoes {
+		if _, jaBuscando := buscandoRecomendacao.LoadOrStore(id, true); !jaBuscando {
+			go func() {
+				defer buscandoRecomendacao.Delete(id)
+				bctx, cancel := context.WithTimeout(s.fundo, 20*time.Second)
+				defer cancel()
+				enricher, err := s.enricher()
+				if err != nil || !enricher.TMDBEnabled() {
+					return
+				}
+				novos, err := enricher.Recomendacoes(bctx, kind, tmdbID)
+				if err != nil {
+					log.Printf("recomendações de %s: %v", nome, err)
+					return
+				}
+				_ = s.db.GravaRecomendacoes(bctx, id, novos)
+			}()
+		}
+	}
+	cards, err := s.db.TitulosPorTMDB(ctx, userID, ids, 20)
+	if err != nil {
+		log.Printf("prateleira porque você viu: %v", err)
+		return nil, ""
+	}
+	return cards, nome
+}
+

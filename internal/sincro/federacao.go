@@ -254,6 +254,26 @@ func (m *Motor) aplicarFederado(ctx context.Context, arm cloud.Armazenamento, ev
 		}
 		return m.db.ProgressoLWW(ctx, p.UserID, fileID, p.Posicao, p.Duracao, p.UpdatedAt)
 
+	case "historico.somado":
+		var h struct {
+			UserID   int64   `json:"user_id"`
+			Ref      db.Ref  `json:"ref"`
+			Em       int64   `json:"em"`
+			Segundos float64 `json:"segundos"`
+		}
+		if err := json.Unmarshal(ev.Payload, &h); err != nil {
+			return err
+		}
+		fileID, err := m.db.ArquivoPorRef(ctx, h.Ref)
+		if err != nil || h.Segundos <= 0 || h.Segundos > 600 {
+			return nil
+		}
+		if _, err := m.db.UserByID(ctx, h.UserID); err != nil {
+			return nil
+		}
+		m.db.RegistraHistorico(ctx, h.UserID, fileID, time.Unix(h.Em, 0), h.Segundos)
+		return nil
+
 	case "favorito.alterado":
 		var f struct {
 			UserID   int64  `json:"user_id"`

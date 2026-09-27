@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"nas/internal/db"
 )
@@ -73,5 +75,40 @@ func TestArmazenamentoSomaPorLocalizacao(t *testing.T) {
 	}
 	if resp.Disco["total"] == 0 {
 		t.Fatal("sem dados do disco")
+	}
+}
+
+func TestRetrospectivaSomaOAno(t *testing.T) {
+	srv, _, comum := prepara(t)
+	ctx := t.Context()
+	user, _ := srv.db.UserByName(ctx, "visita")
+	lib, _ := srv.db.AddLibrary(ctx, "Séries", t.TempDir(), db.KindTV)
+	tid, _ := srv.db.UpsertTitle(ctx, db.Title{LibraryID: lib.ID, Kind: "tv", Name: "Dark", SortName: "dark"})
+	var eps []int64
+	for i := 1; i <= 3; i++ {
+		f, _ := srv.db.UpsertFile(ctx, db.MediaFile{LibraryID: lib.ID, Path: fmt.Sprintf("/x/e%d.mkv", i), RelPath: fmt.Sprintf("e%d.mkv", i), Ext: ".mkv", Size: 1, MTime: 1, Type: db.TypeVideo}, true)
+		srv.db.SetFileTitle(ctx, f, tid)
+		eps = append(eps, f)
+	}
+	hoje := time.Now()
+	for _, f := range eps {
+		srv.db.RegistraHistorico(ctx, user.ID, f, hoje, 1800)
+	}
+	srv.db.RegistraHistorico(ctx, user.ID, eps[0], hoje.AddDate(0, 0, -1), 600)
+
+	rec := chama(t, srv, http.MethodGet, "/api/retrospectiva", comum, "")
+	var r db.Retrospectiva
+	if err := json.NewDecoder(rec.Body).Decode(&r); err != nil {
+		t.Fatal(err)
+	}
+	if r.Segundos != 3*1800+600 || r.Episodios != 3 || r.Titulos != 1 {
+		t.Fatalf("ano: %+v", r)
+	}
+	if r.Maratona == nil || r.Maratona.Episodios != 3 {
+		t.Fatalf("maratona: %+v", r.Maratona)
+	}
+	// Ontem e hoje: dois dias seguidos (se ontem ainda for deste ano).
+	if hoje.YearDay() > 1 && r.MaiorSequencia != 2 {
+		t.Fatalf("sequência = %d, quero 2", r.MaiorSequencia)
 	}
 }

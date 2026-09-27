@@ -210,10 +210,21 @@ func (m *Motor) AplicarEvento(ctx context.Context, arm cloud.Armazenamento, corp
 			}
 		}
 		ds := make([]db.Derivado, 0, len(ev.Manifesto.Derivados))
+		compat := false
 		for _, d := range ev.Manifesto.Derivados {
 			ds = append(ds, db.Derivado{Tipo: d.Tipo, Indice: d.Indice, Key: d.Key, Receita: d.Receita})
+			compat = compat || d.Tipo == "compat"
 		}
-		return m.db.GravaDerivados(ctx, fileID, ds)
+		// Avisa só no nó que pediu (o outro também recebe o evento), e só
+		// quando havia de fato uma versão compatível a esperar.
+		pedido, _, _ := m.db.ProcessamentoDesde(ctx, fileID)
+		if err := m.db.GravaDerivados(ctx, fileID, ds); err != nil {
+			return err
+		}
+		if compat && pedido == "pedido" && m.AoPreparar != nil {
+			m.AoPreparar(fileID)
+		}
+		return nil
 	}
 	return nil
 }

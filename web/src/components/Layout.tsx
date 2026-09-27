@@ -11,6 +11,7 @@ import { Mark } from './Mark'
 import {
   ActivityIcon,
   ChipIcon,
+  ClockIcon,
   DiskIcon,
   ChevronRight,
   NuvemIcon,
@@ -148,6 +149,9 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
       <div className="flex flex-col gap-1">
         <NavLink to="/colecoes" className={navClass}>
           <ListIcon /> Coleções
+        </NavLink>
+        <NavLink to="/retrospectiva" className={navClass}>
+          <ClockIcon /> Retrospectiva
         </NavLink>
         {/* Telemetria é tela de admin; a rota HTTP já recusa as outras contas. */}
         {admin && (

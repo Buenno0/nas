@@ -21,6 +21,7 @@ import (
 	"nas/internal/energia"
 	"nas/internal/media"
 	"nas/internal/metrics"
+	"nas/internal/push"
 	"nas/internal/sincro"
 	"nas/internal/web"
 )
@@ -55,6 +56,8 @@ type Server struct {
 	ruinas  ruinas
 	nuvem   *cloud.Chave
 	sincro  *sincro.Motor
+	push    *push.Avisador
+	novas   novidades
 
 	// preparador cuida da transcodificação sob demanda; fundo é o contexto do
 	// servidor, para um preparo sobreviver à requisição que o pediu mas morrer
@@ -111,6 +114,7 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 	*srv = Server{
 		nuvem:   chave,
 		sincro:  motor,
+		push:    push.Novo(database),
 		cfg:     cfg,
 		db:      database,
 		auth:    auth.NewService(database),
@@ -127,7 +131,12 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 		// Substituído pelo contexto real em Serve; até lá, nada roda.
 		fundo: context.Background(),
 	}
-	motor.AoImportar = srv.capaDoUpload
+	motor.AoImportar = func(fileID int64) {
+		srv.capaDoUpload(fileID)
+		srv.avisarNovidade(fileID)
+	}
+	motor.AoEnviar = func(fileID int64) { srv.avisarEnvio(fileID, nil) }
+	motor.AoPreparar = srv.avisarPreparo
 	return srv
 }
 
@@ -160,6 +169,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/auth/media-token", s.protected(s.handleMediaToken))
 
 	mux.Handle("GET /api/home", s.protected(s.handleHome))
+	mux.Handle("GET /api/retrospectiva", s.protected(s.handleRetrospectiva))
+	mux.Handle("GET /api/push/chave", s.protected(s.handlePushChave))
+	mux.Handle("GET /api/push", s.protected(s.handlePushEstado))
+	mux.Handle("POST /api/push", s.protected(s.handlePushInscrever))
+	mux.Handle("DELETE /api/push", s.protected(s.handlePushRemover))
+	mux.Handle("POST /api/push/teste", s.protected(s.handlePushTeste))
 	mux.Handle("GET /api/libraries", s.protected(s.handleLibraries))
 	mux.Handle("GET /api/titles", s.protected(s.handleTitles))
 	mux.Handle("GET /api/artistas", s.protected(s.handleArtistas))

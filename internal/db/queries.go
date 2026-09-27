@@ -490,6 +490,18 @@ func (d *DB) NextEpisode(ctx context.Context, fileID int64) (int64, error) {
 // SaveProgress grava a posição de reprodução. finished é decidido aqui: com
 // 95% assistido o item sai de "continuar assistindo".
 func (d *DB) SaveProgress(ctx context.Context, userID, fileID int64, position, duration float64) error {
+	// O tempo assistido desde o último aviso vai para o histórico (e dele para
+	// a retrospectiva). Primeiro aviso de um arquivo: nada a somar ainda.
+	agora := time.Now()
+	if anterior, em, ok := d.ProgressoAnterior(ctx, userID, fileID); ok {
+		if somado := d.SomaHistorico(ctx, userID, fileID, anterior, position, em, agora); somado > 0 {
+			if ref, err := d.RefDoArquivo(ctx, fileID); err == nil {
+				d.RegistraEvento(ctx, "historico.somado", map[string]any{
+					"user_id": userID, "ref": ref, "em": agora.Unix(), "segundos": somado,
+				})
+			}
+		}
+	}
 	finished := 0
 	if duration > 0 && position/duration >= 0.95 {
 		finished = 1

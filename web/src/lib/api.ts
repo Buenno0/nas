@@ -476,6 +476,34 @@ export interface Armazenamento {
   disco?: { livre: number; total: number; reserva: number }
 }
 
+export interface TituloNaRetrospectiva {
+  id: number
+  nome: string
+  kind: string
+  poster?: string
+  backdrop?: string
+  segundos: number
+  dia?: string
+}
+
+export interface Retrospectiva {
+  ano: number
+  segundos: number
+  dias: number
+  maior_sequencia: number
+  titulos: number
+  filmes: number
+  episodios: number
+  por_mes: number[]
+  horas: number[]
+  hora_preferida: number
+  generos: { nome: string; segundos: number }[]
+  mais_vistos: TituloNaRetrospectiva[]
+  maratona?: { dia: string; episodios: number; titulo: TituloNaRetrospectiva }
+  primeiro?: TituloNaRetrospectiva
+  ultimo?: TituloNaRetrospectiva
+}
+
 export const api = {
   me: () => request<User>('/api/auth/me'),
   login: (username: string, password: string, remember = true) =>
@@ -557,6 +585,7 @@ export const api = {
   modoEventsUrl: () => '/api/modo/events',
 
   sincronizacao: () => request<EstadoSincronizacao>('/api/sincronizacao'),
+  retrospectiva: (ano?: number) => request<Retrospectiva>(`/api/retrospectiva${ano ? `?ano=${ano}` : ''}`),
   armazenamento: () => request<Armazenamento>('/api/armazenamento'),
   tecnico: (atualizar = false) => request<Tecnico>(`/api/tecnico${atualizar ? '?atualizar=1' : ''}`),
   custo: (atualizar = false) => request<RespostaCusto>(`/api/tecnico/custo${atualizar ? '?atualizar=1' : ''}`),

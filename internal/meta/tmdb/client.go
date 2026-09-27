@@ -309,3 +309,20 @@ func (c *Client) DownloadImage(ctx context.Context, imagePath, size, destDir str
 	}
 	return name, nil
 }
+
+// Recommendations são os títulos que o TMDB sugere para quem viu id
+// (kind "movie" ou "tv"). Só os ids importam: quem chama filtra ao acervo.
+func (c *Client) Recommendations(ctx context.Context, kind string, id int) ([]int, error) {
+	if kind != "movie" && kind != "tv" {
+		return nil, fmt.Errorf("tipo %q sem recomendações", kind)
+	}
+	var resp searchResponse
+	if err := c.get(ctx, fmt.Sprintf("/%s/%d/recommendations", kind, id), url.Values{}, &resp); err != nil {
+		return nil, err
+	}
+	ids := make([]int, 0, len(resp.Results))
+	for _, r := range resp.Results {
+		ids = append(ids, r.ID)
+	}
+	return ids, nil
+}

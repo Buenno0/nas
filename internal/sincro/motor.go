@@ -63,6 +63,11 @@ type Motor struct {
 	// aqui (upload feito pela outra ponta): o servidor busca a capa na hora,
 	// em vez de esperar o próximo scan de metadados.
 	AoImportar func(fileID int64)
+	// AoEnviar: um envio do Mac para a nuvem terminou (avisos no celular).
+	AoEnviar func(fileID int64)
+	// AoPreparar: o worker entregou a versão compatível de um pedido feito
+	// por este nó.
+	AoPreparar func(fileID int64)
 }
 
 type trabalho struct {
@@ -281,6 +286,9 @@ func (m *Motor) enviar(ctx context.Context, arm cloud.Armazenamento, f db.MediaF
 		return err
 	}
 	m.ChegouNaNuvem(ctx, f.ID)
+	if m.AoEnviar != nil {
+		m.AoEnviar(f.ID)
+	}
 	return m.db.MudaCaminho(ctx, f.ID, f.Path, db.LocalAmbos, strings.Trim(obj.ETag, `"`), f.MTime)
 }
 

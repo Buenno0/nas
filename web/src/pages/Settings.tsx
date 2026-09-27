@@ -10,6 +10,7 @@ import { chaveModo, useModoNuvem } from '../lib/nuvem'
 import { mbps, useEnvios } from '../lib/envios'
 import { ListaDeEnvios } from '../components/ListaDeEnvios'
 import { humanSize } from '../lib/format'
+import { AvisosCard } from '../components/AvisosCard'
 
 export function Settings() {
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.me })
@@ -38,6 +39,7 @@ export function Settings() {
       {admin && !naNuvem && <LibrariesCard />}
       {admin && !naNuvem && <MetadataCard />}
       <AppearanceCard />
+      <AvisosCard admin={admin} naNuvem={naNuvem} />
       {naNuvem ? (
         <Card title="Senha" description="Contas e senhas são do Mac: troque por lá, e a mudança chega aqui no próximo sincronismo." >
           <p className="text-xs text-muted">Esta é a instância cloud.</p>

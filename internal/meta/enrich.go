@@ -351,6 +351,14 @@ func (e *Enricher) EnrichUpload(ctx context.Context, titleID int64) error {
 	return e.apply(ctx, title, results[0], "matched")
 }
 
+// Recomendacoes repassa as sugestões do TMDB para quem viu tmdbID.
+func (e *Enricher) Recomendacoes(ctx context.Context, kind string, tmdbID int) ([]int, error) {
+	if !e.client.Enabled() {
+		return nil, tmdb.ErrDisabled
+	}
+	return e.client.Recommendations(ctx, kind, tmdbID)
+}
+
 // SearchCandidates alimenta a correção manual de match na interface.
 func (e *Enricher) SearchCandidates(ctx context.Context, kind db.TitleKind, query string, year int) ([]tmdb.Result, error) {
 	if !e.client.Enabled() {
