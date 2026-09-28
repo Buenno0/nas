@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   api,
@@ -22,6 +22,8 @@ import {
   WarningIcon,
 } from '../components/icons'
 import { ErrorState, Spinner } from '../components/states'
+import { PainelDaSala } from '../components/PainelDaSala'
+import { useSala } from '../lib/useSala'
 
 const SAVE_EVERY_MS = 10_000
 const SKIP_SECONDS = 10
@@ -47,6 +49,8 @@ export function Watch() {
   const { fileId } = useParams()
   const id = Number(fileId)
   const navigate = useNavigate()
+  const [busca] = useSearchParams()
+  const codigoDaSala = busca.get('sala')
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const shellRef = useRef<HTMLDivElement>(null)
@@ -63,6 +67,18 @@ export function Watch() {
   const [speed, setSpeed] = useState(1)
   const [chromeVisible, setChromeVisible] = useState(true)
   const [failed, setFailed] = useState(false)
+  // Carregando no meio do vídeo (pulo, rede lenta). Só aparece se passar de
+  // um instante, para um pulo curto não piscar a tela.
+  const [travado, setTravado] = useState(false)
+  const travadoTimer = useRef<number | undefined>(undefined)
+  const travou = useCallback(() => {
+    window.clearTimeout(travadoTimer.current)
+    travadoTimer.current = window.setTimeout(() => setTravado(true), 300)
+  }, [])
+  const destravou = useCallback(() => {
+    window.clearTimeout(travadoTimer.current)
+    setTravado(false)
+  }, [])
 
   // undefined = a faixa padrão do arquivo. Escolher outra muda a chave do
   // preparo no servidor, então tudo que consulta o plano depende disto.
@@ -93,6 +109,27 @@ export function Watch() {
     enabled: Number.isFinite(id),
   })
   const [preparo, setPreparo] = useState<PreparoProgresso | undefined>(undefined)
+
+  const sala = useSala(codigoDaSala, videoRef)
+  const [criandoSala, setCriandoSala] = useState(false)
+
+  // A sala trocou de episódio: todo mundo vai junto.
+  useEffect(() => {
+    const destino = sala.estado?.file_id
+    if (codigoDaSala && destino && destino !== id) navigate(`/watch/${destino}?sala=${codigoDaSala}`, { replace: true })
+  }, [sala.estado?.file_id, id, codigoDaSala, navigate])
+
+  const abrirSala = async () => {
+    setCriandoSala(true)
+    try {
+      const e = await api.criarSala(id, videoRef.current?.currentTime ?? 0, !(videoRef.current?.paused ?? true))
+      navigate(`/watch/${id}?sala=${e.codigo}&novo=1`, { replace: true })
+    } catch {
+      // o painel da sala mostra o erro quando existir; aqui só não abre
+    } finally {
+      setCriandoSala(false)
+    }
+  }
 
   const save = useCallback(
     (position: number, total: number) => {
@@ -143,6 +180,33 @@ export function Watch() {
     setBuffered(0)
     setPreparo(undefined)
   }, [id])
+
+  // Mantém a tela acesa enquanto toca, como os outros streamings. O
+  // navegador solta a trava quando a aba some; volta a pedir ao reaparecer.
+  useEffect(() => {
+    if (!playing || !('wakeLock' in navigator)) return
+    let trava: WakeLockSentinel | undefined
+    let ativo = true
+    const pedir = () => {
+      if (document.visibilityState !== 'visible') return
+      navigator.wakeLock.request('screen').then(
+        (t) => {
+          if (ativo) trava = t
+          else void t.release()
+        },
+        () => {
+          // sem permissão (bateria fraca, iframe): segue sem a trava
+        },
+      )
+    }
+    pedir()
+    document.addEventListener('visibilitychange', pedir)
+    return () => {
+      ativo = false
+      document.removeEventListener('visibilitychange', pedir)
+      void trava?.release().catch(() => {})
+    }
+  }, [playing])
 
   // Preparo sob demanda: se o plano não é direto, pede o trabalho ao servidor e
   // acompanha por SSE. O trabalho é idempotente — recarregar a página não
@@ -363,19 +427,41 @@ export function Watch() {
       <video
         ref={videoRef}
         poster={file.poster}
-        autoPlay
+        autoPlay={!codigoDaSala}
         playsInline
         onClick={togglePlay}
         onLoadedMetadata={(e) => {
           const video = e.currentTarget
           setDuration(video.duration || file.duration || 0)
-          // Retoma de onde parou, mas não a 5 segundos do fim.
-          if (!resumed.current && file.position && file.position > 5) {
+          // Retoma de onde parou, mas não a 5 segundos do fim. Numa sala,
+          // quem manda no ponto é a sala.
+          if (!codigoDaSala && !resumed.current && file.position && file.position > 5) {
             if (!video.duration || file.position < video.duration - 5) {
               video.currentTime = file.position
             }
           }
           resumed.current = true
+          if (codigoDaSala) sala.alinhar()
+        }}
+        onLoadStart={travou}
+        onSeeking={() => {
+          travou()
+          sala.aoPular()
+        }}
+        onSeeked={(e) => {
+          if (e.currentTarget.readyState >= 3) destravou()
+        }}
+        onWaiting={() => {
+          travou()
+          sala.aoTravar()
+        }}
+        onPlaying={() => {
+          destravou()
+          sala.aoDestravar()
+        }}
+        onCanPlay={() => {
+          destravou()
+          sala.aoDestravar()
         }}
         onTimeUpdate={(e) => {
           const video = e.currentTarget
@@ -390,15 +476,18 @@ export function Watch() {
         onPlay={() => {
           setPlaying(true)
           revealChrome()
+          sala.aoTocar()
         }}
         onPause={(e) => {
           setPlaying(false)
           setChromeVisible(true)
           save(e.currentTarget.currentTime, e.currentTarget.duration)
+          sala.aoPausar()
         }}
         onEnded={(e) => {
           save(e.currentTarget.duration, e.currentTarget.duration)
-          if (next?.next) navigate(`/watch/${next.next}`)
+          if (next?.next && codigoDaSala) sala.enviar({ tipo: 'arquivo', file_id: next.next })
+          else if (next?.next) navigate(`/watch/${next.next}`)
         }}
         onError={() => setFailed(true)}
         className={['h-full w-full', isAudio ? 'object-contain opacity-90' : 'object-contain'].join(' ')}
@@ -417,6 +506,12 @@ export function Watch() {
           />
         )}
       </video>
+
+      {travado && !failed && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status" aria-label="Carregando">
+          <span className="h-14 w-14 animate-spin rounded-full border-4 border-white/20 border-t-white" />
+        </div>
+      )}
 
       {/* Item que mora só no bucket, com o modo local: existe, não toca. */}
       {plano?.indisponivel && (
@@ -445,6 +540,15 @@ export function Watch() {
           volta o aviso com o comando manual. */}
       {((plano && plano.modo !== 'direct' && (!plano.ffmpeg || !plano.transcodificacao_ativa)) || failed) && (
         <UnsupportedOverlay file={file} plano={plano} />
+      )}
+
+      {codigoDaSala && (
+        <PainelDaSala
+          codigo={codigoDaSala}
+          sala={sala}
+          visivel={chromeVisible}
+          sair={() => navigate(`/watch/${id}`, { replace: true })}
+        />
       )}
 
       {/* Barra superior */}
@@ -605,6 +709,18 @@ export function Watch() {
               </select>
             )}
 
+            {!codigoDaSala && (
+              <button
+                type="button"
+                onClick={() => void abrirSala()}
+                disabled={criandoSala}
+                className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium transition hover:bg-white/20 disabled:opacity-50"
+              >
+                Assistir junto
+              </button>
+            )}
+
+            {!codigoDaSala && (
             <select
               value={speed}
               onChange={(e) => setSpeed(Number(e.target.value))}
@@ -617,8 +733,18 @@ export function Watch() {
                 </option>
               ))}
             </select>
+            )}
 
-            {next?.next && (
+            {next?.next && codigoDaSala && (
+              <button
+                type="button"
+                onClick={() => sala.enviar({ tipo: 'arquivo', file_id: next.next! })}
+                className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium transition hover:bg-white/20"
+              >
+                Próximo episódio
+              </button>
+            )}
+            {next?.next && !codigoDaSala && (
               <Link
                 to={`/watch/${next.next}`}
                 className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium transition hover:bg-white/20"

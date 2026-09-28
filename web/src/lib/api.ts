@@ -504,6 +504,32 @@ export interface Retrospectiva {
   ultimo?: TituloNaRetrospectiva
 }
 
+export interface EstadoDaSala {
+  codigo: string
+  file_id: number
+  tocando: boolean
+  posicao: number
+  em: number
+  por?: string
+  dono: string
+  cliente?: string
+  seq?: number
+  presenca: string[]
+  aguardando?: string[]
+}
+
+export type ComandoDaSala =
+  | { tipo: 'play' | 'pause' | 'seek'; posicao: number; cliente?: string; seq?: number }
+  | { tipo: 'arquivo'; file_id: number }
+  | { tipo: 'carregando' | 'pronto' }
+  | { tipo: 'reacao'; emoji: string }
+  | { tipo: 'encerrar' }
+
+export type MensagemDaSala =
+  | { tipo: 'estado'; estado: EstadoDaSala; agora: number }
+  | { tipo: 'reacao'; de: string; emoji: string; agora: number }
+  | { tipo: 'fim'; de: string; agora: number }
+
 export const api = {
   me: () => request<User>('/api/auth/me'),
   login: (username: string, password: string, remember = true) =>
@@ -559,6 +585,13 @@ export const api = {
   prepareEventsUrl: (fileId: number, audio?: number) =>
     `/api/files/${fileId}/prepare/events${planoQuery(audio)}`,
   nextEpisode: (fileId: number) => request<{ next: number | null }>(`/api/files/${fileId}/next`),
+
+  criarSala: (fileId: number, posicao: number, tocando: boolean) =>
+    request<EstadoDaSala>('/api/juntos', { method: 'POST', body: JSON.stringify({ file_id: fileId, posicao, tocando }) }),
+  sala: (codigo: string) => request<EstadoDaSala>(`/api/juntos/${encodeURIComponent(codigo)}`),
+  comandoDaSala: (codigo: string, c: ComandoDaSala) =>
+    request<void>(`/api/juntos/${encodeURIComponent(codigo)}`, { method: 'POST', body: JSON.stringify(c) }),
+  eventosDaSalaUrl: (codigo: string) => `/api/juntos/${encodeURIComponent(codigo)}/eventos`,
 
   saveProgress: (fileId: number, position: number, duration: number) =>
     request<void>(`/api/progress/${fileId}`, {

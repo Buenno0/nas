@@ -19,6 +19,7 @@ import (
 	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/energia"
+	assistir "nas/internal/juntos"
 	"nas/internal/media"
 	"nas/internal/metrics"
 	"nas/internal/push"
@@ -57,6 +58,7 @@ type Server struct {
 	nuvem   *cloud.Chave
 	sincro  *sincro.Motor
 	push    *push.Avisador
+	juntos  *assistir.Salas
 	novas   novidades
 
 	// preparador cuida da transcodificação sob demanda; fundo é o contexto do
@@ -115,6 +117,7 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 		nuvem:   chave,
 		sincro:  motor,
 		push:    push.Novo(database),
+		juntos:  assistir.Novas(),
 		cfg:     cfg,
 		db:      database,
 		auth:    auth.NewService(database),
@@ -175,6 +178,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/push", s.protected(s.handlePushInscrever))
 	mux.Handle("DELETE /api/push", s.protected(s.handlePushRemover))
 	mux.Handle("POST /api/push/teste", s.protected(s.handlePushTeste))
+	mux.Handle("POST /api/juntos", s.protected(s.handleCriarSala))
+	mux.Handle("GET /api/juntos/{codigo}", s.protected(s.handleSala))
+	mux.Handle("POST /api/juntos/{codigo}", s.protected(s.handleComandoDaSala))
+	mux.Handle("GET /api/juntos/{codigo}/eventos", s.protected(s.handleEventosDaSala))
 	mux.Handle("GET /api/libraries", s.protected(s.handleLibraries))
 	mux.Handle("GET /api/titles", s.protected(s.handleTitles))
 	mux.Handle("GET /api/artistas", s.protected(s.handleArtistas))

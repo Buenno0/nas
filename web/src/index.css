@@ -295,3 +295,24 @@ body {
 .arm-sobe { transition: transform 1.2s cubic-bezier(.2,.8,.2,1); }
 .arm-barra { transition: width 1s cubic-bezier(.2,.8,.2,1); }
 @keyframes arm-onda { from { transform: translateX(0); } to { transform: translateX(-200px); } }
+
+/* Assistir junto: a reação sobe e some. */
+@keyframes sala-reacao {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  12% { transform: translateY(-20px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(-260px) scale(1); opacity: 0; }
+}
+.sala-reacao { animation: sala-reacao 3.6s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .sala-reacao { animation: none; opacity: 0.9; }
+}
+
+@keyframes sala-toast {
+  0% { transform: translateY(8px); opacity: 0; }
+  8%, 88% { transform: none; opacity: 1; }
+  100% { opacity: 0; }
+}
+.sala-toast { animation: sala-toast 4s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .sala-toast { animation: none; }
+}
