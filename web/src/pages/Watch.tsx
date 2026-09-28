@@ -11,6 +11,7 @@ import {
 } from '../lib/api'
 import { clockTime } from '../lib/format'
 import {
+  CastIcon,
   ChevronLeft,
   DownloadIcon,
   FullscreenIcon,
@@ -24,6 +25,7 @@ import {
 import { ErrorState, Spinner } from '../components/states'
 import { PainelDaSala } from '../components/PainelDaSala'
 import { useSala } from '../lib/useSala'
+import { castar, pararCast, useCast } from '../lib/cast'
 
 const SAVE_EVERY_MS = 10_000
 const SKIP_SECONDS = 10
@@ -112,6 +114,8 @@ export function Watch() {
 
   const sala = useSala(codigoDaSala, videoRef)
   const [criandoSala, setCriandoSala] = useState(false)
+  const cast = useCast()
+  const [erroCast, setErroCast] = useState<string>()
 
   // A sala trocou de episódio: todo mundo vai junto.
   useEffect(() => {
@@ -279,6 +283,44 @@ export function Watch() {
     video.load()
     resumed.current = false
   }, [plano])
+
+  // A TV abre a URL sozinha, sem cookie: vai absoluta e com o token de mídia.
+  const mandarParaTv = async () => {
+    const video = videoRef.current
+    const alvo = video?.getAttribute('src')
+    if (!video || !alvo || !file) return
+    if (cast.tv) {
+      pararCast()
+      return
+    }
+    setErroCast(undefined)
+    try {
+      const { token, param } = await api.tokenDeMidia()
+      const comToken = (u: string) => {
+        const url = new URL(u, window.location.origin)
+        url.searchParams.set(param, token)
+        return url.toString()
+      }
+      await castar({
+        url: comToken(alvo),
+        titulo: file.title_name || file.name,
+        capa: file.poster ? comToken(file.poster) : undefined,
+        inicio: video.currentTime,
+        legenda: legendaSelecionada?.url
+          ? {
+              url: comToken(legendaSelecionada.url),
+              lang: legendaSelecionada.lang || 'und',
+              rotulo: legendaSelecionada.rotulo,
+            }
+          : undefined,
+      })
+      video.pause()
+    } catch (e) {
+      // Fechar o seletor sem escolher TV também cai aqui; não é erro.
+      const msg = e instanceof Error ? e.message : String(e)
+      if (!/cancel/i.test(msg)) setErroCast('Não deu para mandar para a TV')
+    }
+  }
 
   const revealChrome = useCallback(() => {
     setChromeVisible(true)
@@ -751,6 +793,21 @@ export function Watch() {
               >
                 Próximo episódio
               </Link>
+            )}
+
+            {cast.disponivel && !codigoDaSala && (
+              <button
+                type="button"
+                onClick={() => void mandarParaTv()}
+                aria-label={cast.tv ? `Parar de transmitir para ${cast.tv}` : 'Transmitir para a TV'}
+                title={erroCast ?? (cast.tv ? `Transmitindo para ${cast.tv}` : 'Transmitir para a TV')}
+                className={[
+                  'grid h-9 w-9 place-items-center rounded-full transition hover:bg-white/10',
+                  cast.tv ? 'text-sky-400' : erroCast ? 'text-red-400' : '',
+                ].join(' ')}
+              >
+                <CastIcon />
+              </button>
             )}
 
             <button

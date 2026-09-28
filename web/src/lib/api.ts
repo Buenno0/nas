@@ -549,6 +549,11 @@ export const api = {
       body: JSON.stringify({ user_code: userCode }),
     }),
 
+  tokenDeMidia: () =>
+    request<{ token: string; expira_em: string; param: string }>('/api/auth/media-token', {
+      method: 'POST',
+    }),
+
   home: () => request<HomeResponse>('/api/home'),
   libraries: () => request<Library[]>('/api/libraries'),
   colecoes: () => request<Colecao[]>('/api/colecoes'),

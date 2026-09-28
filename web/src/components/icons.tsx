@@ -151,6 +151,14 @@ export const PipIcon = (p: IconProps) => (
   </Icon>
 )
 
+export const CastIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 8V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
+    <path d="M3 12a8 8 0 0 1 8 8M3 16a4 4 0 0 1 4 4" />
+    <path d="M3 20h.01" />
+  </Icon>
+)
+
 export const DownloadIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 4v10m0 0 4-4m-4 4-4-4" />
