@@ -70,6 +70,10 @@ func Run(args []string) int {
 		err = cmdPush(ctx, rest)
 	case "worker":
 		err = cmdWorker(ctx, rest)
+	case "bastao":
+		err = cmdBastao(ctx, rest)
+	case "saude":
+		err = cmdSaude()
 	case "status":
 		err = cmdStatus()
 	case "stop":

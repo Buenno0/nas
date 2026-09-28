@@ -96,3 +96,10 @@ func conectorAtual() Conector {
 	defer conectorMu.RUnlock()
 	return conector
 }
+
+// ConectarDireto abre o armazenamento sem passar pelo kill switch. Só para
+// quem roda na própria nuvem e precisa do bucket antes do servidor existir
+// (a passagem de bastão entre tasks, no deploy).
+func ConectarDireto(ctx context.Context, cfg config.Nuvem) (Armazenamento, error) {
+	return conectorAtual()(ctx, cfg, http.DefaultClient)
+}

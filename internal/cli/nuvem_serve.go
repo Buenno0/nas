@@ -8,9 +8,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"nas/internal/api"
+	"nas/internal/bastao"
 	"nas/internal/cloud"
 	"nas/internal/config"
 	"nas/internal/db"
@@ -107,7 +109,30 @@ func serveNuvem(ctx context.Context, portOverride int) error {
 	}()
 	defer chave.Desligar()
 
+	// Bastão: quando a task do próximo deploy pedir a vez, esta encerra com
+	// calma e a nova assume (ver internal/bastao).
+	servindo, passar := context.WithCancel(ctx)
+	defer passar()
+	var passou atomic.Bool
+	if b, err := bucketDoBastao(ctx); err == nil {
+		go bastao.Manter(servindo, b, euNaNuvem(), time.Now, func() {
+			passou.Store(true)
+			passar()
+		})
+	} else {
+		log.Printf("bastão: sem bucket (%v); troca de task derruba o site", err)
+	}
+
 	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	fmt.Printf("  Ozymandias %s — instância cloud em %s\n", Version, addr)
-	return srv.Serve(ctx, addr)
+	err = srv.Serve(servindo, addr)
+	if passou.Load() {
+		// Dá ao Litestream (sync a cada 1 s) tempo de mandar as últimas
+		// escritas antes de o processo sair; o script libera o bastão depois.
+		database.Close()
+		time.Sleep(3 * time.Second)
+		log.Println("bastão: passado")
+		return nil
+	}
+	return err
 }

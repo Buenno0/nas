@@ -9,12 +9,49 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+// Troca de task da nuvem (deploy) deixa o endereço fora por alguns segundos:
+// leituras tentam de novo por até RECONECTA_MS, e a página mostra
+// "Reconectando…" enquanto isso. Escritas não repetem sozinhas.
+const RECONECTA_MS = 30_000
+const FORA_DO_AR = [502, 503, 504]
+let tentando = 0
+function avisarConexao(delta: number) {
+  tentando += delta
+  window.dispatchEvent(new CustomEvent('ozy:reconectando', { detail: tentando > 0 }))
+}
+
+async function buscar(path: string, init?: RequestInit): Promise<Response> {
+  const opcoes: RequestInit = {
     credentials: 'same-origin',
     headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
     ...init,
-  })
+  }
+  const leitura = !init?.method || init.method === 'GET'
+  const limite = Date.now() + RECONECTA_MS
+  let espera = 1000
+  let avisou = false
+  try {
+    for (;;) {
+      try {
+        const res = await fetch(path, opcoes)
+        if (!leitura || !FORA_DO_AR.includes(res.status) || Date.now() > limite) return res
+      } catch (err) {
+        if (!leitura || Date.now() > limite) throw err
+      }
+      if (!avisou) {
+        avisou = true
+        avisarConexao(1)
+      }
+      await new Promise((r) => setTimeout(r, espera))
+      espera = Math.min(espera * 1.5, 4000)
+    }
+  } finally {
+    if (avisou) avisarConexao(-1)
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await buscar(path, init)
 
   if (res.status === 204) return undefined as T
   if (!res.ok) {

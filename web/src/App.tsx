@@ -16,6 +16,7 @@ import { Retrospectiva } from "./pages/Retrospectiva";
 import { Artista, Artistas } from "./pages/Artistas";
 import { Colecao, Colecoes } from "./pages/Colecoes";
 import { Watch } from "./pages/Watch";
+import { Reconectando } from "./components/Reconectando";
 import { NaoEncontrado, Ruinas } from "./pages/Ruinas";
 import { ConectarTV } from "./pages/ConectarTV";
 import { EnviosProvider } from "./lib/envios";
@@ -59,6 +60,7 @@ export default function App() {
   // acervo não o interrompe nem some com o progresso.
   return (
     <EnviosProvider>
+      <Reconectando />
       <Routes>
         {/* O player ocupa a tela inteira, fora do layout com barras. */}
         <Route path="/watch/:fileId" element={<Watch />} />

@@ -226,11 +226,24 @@ resource "aws_ecs_task_definition" "nuvem" {
       ]
       secrets          = [for p in aws_ssm_parameter.tmdb : { name = "NAS_TMDB_KEY", valueFrom = p.arn }]
       logConfiguration = local.log
+      # Saudável só depois de receber o bastão e restaurar o banco: é isto
+      # que segura o Tailscale da task nova (dependsOn abaixo). O startPeriod
+      # cobre a espera pela antiga (até 90 s) e o restore.
+      healthCheck = {
+        command     = ["CMD", "nas", "saude"]
+        interval    = 5
+        timeout     = 3
+        retries     = 3
+        startPeriod = 300
+      }
     },
     {
       name      = "tailscale"
       image     = "tailscale/tailscale:stable"
       essential = true
+      # A mesma identidade (no EFS) não pode estar em dois nós: o Tailscale da
+      # task nova só sobe quando o app dela assumiu o bastão.
+      dependsOn = [{ containerName = "ozymandias", condition = "HEALTHY" }]
       # O containerboot só aceita a configuração de serve como arquivo.
       entryPoint = ["/bin/sh", "-c"]
       command    = ["printf '%s' \"$SERVE_JSON\" > /tmp/serve.json && exec /usr/local/bin/containerboot"]
@@ -272,9 +285,12 @@ resource "aws_ecs_service" "nuvem" {
   # `aws ecs execute-command`. Sem SSH nem porta aberta; sessões no CloudTrail.
   enable_execute_command = true
   depends_on             = [aws_efs_mount_target.tailscale]
-  # Um só escritor no SQLite: nunca duas tasks ao mesmo tempo.
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
+  # Deploy com passagem de bastão: a task nova sobe com a antiga ainda no ar
+  # e espera (deploy/ozymandias-nuvem, internal/bastao). Continua havendo um
+  # só escritor no SQLite e um só nó no Funnel: a nova só abre o banco e sobe
+  # o Tailscale depois que a antiga devolve o bastão.
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
 
   capacity_provider_strategy {
     capacity_provider = "FARGATE_SPOT"

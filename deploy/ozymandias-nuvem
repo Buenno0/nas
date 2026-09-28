@@ -1,8 +1,24 @@
 #!/bin/sh
-# Entrada da instância cloud: restaura o banco do bucket (se houver réplica e
-# ainda não houver banco local) e sobe o Ozymandias embrulhado pelo Litestream,
-# que replica cada escrita para o S3.
+# Entrada da instância cloud.
+#
+# 1. Espera o bastão: num deploy, a task antiga continua servindo enquanto esta
+#    sobe; aqui ela pede a vez e espera a antiga encerrar (ver internal/bastao).
+# 2. Restaura o banco do bucket — já com as últimas escritas da antiga.
+# 3. Sobe o Ozymandias embrulhado pelo Litestream, que replica cada escrita.
+# 4. Ao sair (bastão passado, SIGTERM, queda), devolve o bastão: o Litestream
+#    já fechou, então a próxima task restaura um banco completo.
 set -eu
 mkdir -p /trabalho/.nas
+nas bastao esperar
 litestream restore -config /etc/litestream.yml -if-db-not-exists -if-replica-exists /trabalho/.nas/nas.db
-exec litestream replicate -config /etc/litestream.yml -exec "nas serve --nuvem"
+# Sem exec (falta o passo 4), o sh é o processo 1 e não repassa sinais: o
+# SIGTERM da ECS precisa chegar ao Litestream para ele fechar com sync.
+litestream replicate -config /etc/litestream.yml -exec "nas serve --nuvem" &
+filho=$!
+trap 'kill -TERM "$filho" 2>/dev/null' TERM INT
+status=0
+wait "$filho" || status=$?
+# Um sinal interrompe o primeiro wait; o segundo espera o fim de verdade.
+wait "$filho" 2>/dev/null || true
+nas bastao liberar || true
+exit "$status"
