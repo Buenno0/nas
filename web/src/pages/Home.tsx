@@ -6,6 +6,7 @@ import { Poster, PosterSkeleton } from '../components/Poster'
 import { Row, RowItem } from '../components/Row'
 import { EmptyState, ErrorState } from '../components/states'
 import { PlayIcon } from '../components/icons'
+import { VoltarParaSala } from '../components/VoltarParaSala'
 
 export function Home() {
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -50,6 +51,7 @@ export function Home() {
 
   return (
     <div className="space-y-10 py-6">
+      <VoltarParaSala />
       {data?.hero && <Hero title={data.hero} />}
 
       {data && data.continue.length > 0 && (

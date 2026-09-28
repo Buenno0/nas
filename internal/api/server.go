@@ -111,7 +111,11 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 	}
 	srv := &Server{}
 	motor := sincro.Novo(database, chave, func() int64 { return int64(cfg.ReservaGB * 1e9) }, func() config.Nuvem {
-		return srv.ConfigNuvem()
+		// Tempo visto junto numa sala vira histórico (a retrospectiva mostra).
+	srv.juntos.AoAssistirJunto = func(nomes []string, _ int64, segundos float64) {
+		srv.db.RegistraJuntos(context.Background(), nomes, time.Now(), segundos)
+	}
+	return srv.ConfigNuvem()
 	})
 	*srv = Server{
 		nuvem:   chave,

@@ -3,7 +3,7 @@
 // diferença — pequena, mexendo na velocidade; grande, pulando.
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api, type ComandoDaSala, type EstadoDaSala, type MensagemDaSala } from './api'
+import { api, type ComandoDaSala, type EstadoDaSala, type LinhaDoChat, type MensagemDaSala } from './api'
 
 const PULA_ACIMA_S = 2
 const AJUSTA_ACIMA_S = 0.3
@@ -17,6 +17,45 @@ const SAIDA_MS = 4000
 const PULO_MS = 350
 // Esta aba, para reconhecer os próprios comandos quando voltam do servidor.
 const CLIENTE = Math.random().toString(36).slice(2)
+
+// Conexão de cada pessoa, como ela mesma informa a cada STATUS_MS.
+const STATUS_MS = 5000
+export interface Conexao {
+  dif: number
+  travado: boolean
+  em: number
+}
+
+// "Voltar para a sala": a última sala deste navegador, por algumas horas.
+const CHAVE_ULTIMA = 'ozy.ultimaSala'
+const VALIDADE_ULTIMA_MS = 6 * 3600_000
+export interface UltimaSala {
+  codigo: string
+  fileId: number
+  em: number
+}
+export function ultimaSala(): UltimaSala | undefined {
+  try {
+    const u = JSON.parse(localStorage.getItem(CHAVE_ULTIMA) ?? 'null') as UltimaSala | null
+    return u && Date.now() - u.em < VALIDADE_ULTIMA_MS ? u : undefined
+  } catch {
+    return undefined
+  }
+}
+export function esquecerSala() {
+  try {
+    localStorage.removeItem(CHAVE_ULTIMA)
+  } catch {
+    // sem armazenamento: nada a esquecer
+  }
+}
+function lembrarSala(u: UltimaSala) {
+  try {
+    localStorage.setItem(CHAVE_ULTIMA, JSON.stringify(u))
+  } catch {
+    // sem armazenamento: só não oferece voltar depois
+  }
+}
 
 export interface Reacao {
   id: number
@@ -35,6 +74,9 @@ export function useSala(codigo: string | null, videoRef: RefObject<HTMLVideoElem
   const [bloqueado, setBloqueado] = useState(false)
   const [fim, setFim] = useState<string>()
   const [avisos, setAvisos] = useState<{ id: number; texto: string }[]>([])
+  const [chat, setChat] = useState<LinhaDoChat[]>([])
+  const [conexoes, setConexoes] = useState<Record<string, Conexao>>({})
+  const avisouSoDono = useRef(0)
   // Saída só vira aviso se durar: uma conexão que cai e volta não é "saiu".
   const saidas = useRef(new Map<string, number>())
 
@@ -68,13 +110,14 @@ export function useSala(codigo: string | null, videoRef: RefObject<HTMLVideoElem
     [codigo],
   )
 
+  const agoraServidor = useCallback(() => Date.now() + (desvio.current ?? 0), [])
+
   const alvo = useCallback(() => {
     const e = estadoRef.current
     if (!e) return 0
     if (!e.tocando) return e.posicao
-    const agoraServidor = Date.now() + (desvio.current ?? 0)
-    return e.posicao + Math.max(0, agoraServidor - e.em) / 1000
-  }, [])
+    return e.posicao + Math.max(0, agoraServidor() - e.em) / 1000
+  }, [agoraServidor])
 
   const alinhar = useCallback(() => {
     const video = videoRef.current
@@ -83,8 +126,10 @@ export function useSala(codigo: string | null, videoRef: RefObject<HTMLVideoElem
     if (!video || !e || video.readyState < 1 || video.seeking) return
     const onde = alvo()
     const dif = onde - video.currentTime
-    if (Math.abs(dif) < 1 && video.paused === !e.tocando) sincronizado.current = true
-    if (!e.tocando) {
+    // Contagem regressiva: a sala já está "tocando", mas só a partir de `em`.
+    const emContagem = e.tocando && agoraServidor() < e.em
+    if (Math.abs(dif) < 1 && (video.paused === !e.tocando || emContagem)) sincronizado.current = true
+    if (!e.tocando || emContagem) {
       // A sala está esperando por nós (depois de um pulo ou travada): avisa
       // quando der para tocar do ponto novo sem engasgar.
       const esperando = !!eu && (e.aguardando ?? []).includes(eu.username)
@@ -121,7 +166,7 @@ export function useSala(codigo: string | null, videoRef: RefObject<HTMLVideoElem
         () => setBloqueado(true),
       )
     }
-  }, [alvo, enviar, eu, videoRef])
+  }, [agoraServidor, alvo, enviar, eu, videoRef])
 
   useEffect(() => {
     if (!codigo || !('EventSource' in window)) return
@@ -131,11 +176,25 @@ export function useSala(codigo: string | null, videoRef: RefObject<HTMLVideoElem
       const d = m.agora - Date.now()
       if (desvio.current === undefined || d > desvio.current) desvio.current = d
       if (m.tipo === 'fim') {
+        esquecerSala()
         fonte.close()
         setFim(m.de)
         return
       }
+      if (m.tipo === 'chat') {
+        setChat((c) => [...c.slice(-99), m.linha])
+        return
+      }
+      if (m.tipo === 'historico') {
+        setChat(m.chat)
+        return
+      }
+      if (m.tipo === 'conexao') {
+        setConexoes((c) => ({ ...c, [m.de]: { ...m.conexao, em: Date.now() } }))
+        return
+      }
       if (m.tipo === 'estado') {
+        lembrarSala({ codigo: m.estado.codigo, fileId: m.estado.file_id, em: Date.now() })
         if (estadoRef.current?.file_id !== m.estado.file_id) sincronizado.current = false
         const antes = estadoRef.current?.presenca
         if (antes) {
@@ -180,14 +239,41 @@ export function useSala(codigo: string | null, videoRef: RefObject<HTMLVideoElem
       if (fonte.readyState === EventSource.CLOSED) setErro('A sala foi encerrada.')
     }
     const relogio = window.setInterval(alinhar, 1000)
+    // Cada um conta aos outros como está: a diferença para o ponto da sala e
+    // se está travado carregando (o pontinho verde/amarelo/vermelho).
+    const status = window.setInterval(() => {
+      const v = videoRef.current
+      const e = estadoRef.current
+      if (!v || !e) return
+      const onde = e.tocando ? e.posicao + Math.max(0, Date.now() + (desvio.current ?? 0) - e.em) / 1000 : e.posicao
+      void api
+        .comandoDaSala(codigo, {
+          tipo: 'conexao',
+          dif: Math.round((onde - v.currentTime) * 100) / 100,
+          travado: e.tocando && !v.paused && v.readyState < 3,
+        })
+        .catch(() => {})
+    }, STATUS_MS)
     return () => {
       fonte.close()
       window.clearInterval(relogio)
+      window.clearInterval(status)
       window.clearTimeout(travaTimer.current)
     }
-  }, [codigo, alinhar, avisar])
+  }, [codigo, alinhar, avisar, videoRef])
 
-  const nosso = () => !sincronizado.current || !estadoRef.current || Date.now() < ecoAte.current
+  // Modo cinema: o convidado não controla; o alinhamento desfaz o gesto.
+  const bloqueadoPeloDono = () => {
+    const e = estadoRef.current
+    if (!e?.so_dono || !eu || e.dono === eu.username) return false
+    if (Date.now() - avisouSoDono.current > 4000) {
+      avisouSoDono.current = Date.now()
+      avisar(`Modo cinema: só ${e.dono} controla o vídeo`)
+    }
+    return true
+  }
+  const nosso = () =>
+    !sincronizado.current || !estadoRef.current || Date.now() < ecoAte.current || bloqueadoPeloDono()
 
   // O comando local vale na hora, sem esperar a volta do servidor: senão o
   // relógio de alinhamento, ainda com o estado velho, desfazia o pulo (ou a
@@ -253,5 +339,8 @@ export function useSala(codigo: string | null, videoRef: RefObject<HTMLVideoElem
     alinhar()
   }, [alinhar])
 
-  return { estado, reacoes, avisos, erro, bloqueado, fim, enviar, entrar, alinhar, aoTocar, aoPausar, aoPular, aoTravar, aoDestravar }
+  const falar = useCallback((texto: string) => enviar({ tipo: 'chat', texto }), [enviar])
+  const souDono = !!eu && estado?.dono === eu.username
+
+  return { estado, reacoes, avisos, chat, conexoes, falar, souDono, agoraServidor, eu: eu?.username, erro, bloqueado, fim, enviar, entrar, alinhar, aoTocar, aoPausar, aoPular, aoTravar, aoDestravar }
 }

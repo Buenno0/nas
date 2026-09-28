@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nas/internal/auth"
+	"nas/internal/db"
 )
 
 // handleRetrospectiva devolve o ano de quem pede ("seu ano no Ozymandias").
@@ -37,6 +38,9 @@ func (s *Server) handleRetrospectiva(w http.ResponseWriter, r *http.Request) {
 	if ret.Maratona != nil {
 		ret.Maratona.Titulo.Poster = posterURL(ret.Maratona.Titulo.Poster)
 		ret.Maratona.Titulo.Backdrop = posterURL(ret.Maratona.Titulo.Backdrop)
+	}
+	if ret.Juntos, err = s.db.CompanhiasDoAno(r.Context(), user.ID, ret.Ano); err != nil {
+		ret.Juntos = []db.Companhia{}
 	}
 	writeJSON(w, http.StatusOK, ret)
 }

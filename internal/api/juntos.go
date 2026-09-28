@@ -64,6 +64,9 @@ func (s *Server) handleComandoDaSala(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, assistir.ErrSalaNaoExiste) {
 			status = http.StatusNotFound
 		}
+		if errors.Is(err, assistir.ErrSoDono) {
+			status = http.StatusForbidden
+		}
 		writeError(w, status, err.Error())
 		return
 	}

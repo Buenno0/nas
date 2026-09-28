@@ -42,14 +42,33 @@ type Estado struct {
 	Presenca []string `json:"presenca"`
 	// Aguardando lista quem está carregando: a sala espera por eles.
 	Aguardando []string `json:"aguardando,omitempty"`
+	// SoDono: "modo cinema", só quem abriu controla play, pausa e pulos.
+	SoDono bool `json:"so_dono,omitempty"`
 }
 
-// Mensagem é o que vai pelo SSE: um estado novo ou uma reação.
+// Linha é uma mensagem do chat da sala.
+type Linha struct {
+	De    string `json:"de"`
+	Texto string `json:"texto"`
+	Em    int64  `json:"em"`
+}
+
+// Conexao é como um espectador está: a diferença para o ponto da sala e se
+// está travado carregando. Quem manda é o próprio espectador.
+type Conexao struct {
+	Dif     float64 `json:"dif"`
+	Travado bool    `json:"travado"`
+}
+
+// Mensagem é o que vai pelo SSE.
 type Mensagem struct {
-	Tipo   string  `json:"tipo"` // "estado" | "reacao" | "fim"
-	Estado *Estado `json:"estado,omitempty"`
-	De     string  `json:"de,omitempty"`
-	Emoji  string  `json:"emoji,omitempty"`
+	Tipo    string   `json:"tipo"` // estado | reacao | fim | chat | historico | conexao
+	Estado  *Estado  `json:"estado,omitempty"`
+	De      string   `json:"de,omitempty"`
+	Emoji   string   `json:"emoji,omitempty"`
+	Linha   *Linha   `json:"linha,omitempty"`
+	Chat    []Linha  `json:"chat,omitempty"`
+	Conexao *Conexao `json:"conexao,omitempty"`
 }
 
 type espectador struct {
@@ -64,7 +83,19 @@ type sala struct {
 	vazia      time.Time
 	pausouPor  bool // a pausa atual foi da sala, esperando alguém carregar
 	espera     *time.Timer
+	chat       []Linha
+	pausouEm   time.Time // para a contagem regressiva depois de pausa longa
+	contadoAte int64     // até onde o tempo assistido junto já foi somado (ms)
 }
+
+// Contagem regressiva: dar play depois de uma pausa mais longa que
+// pausaLonga começa em contagem ms, para ninguém perder o começo.
+const (
+	contagem   = 3000
+	pausaLonga = 5 * time.Second
+	maxChat    = 50
+	maxTexto   = 300
+)
 
 // Depois de um pulo, a sala espera todo mundo carregar no ponto novo, mas
 // não para sempre: quem demora mais que isto se alinha andando.
@@ -74,6 +105,9 @@ type Salas struct {
 	mu    sync.Mutex
 	salas map[string]*sala
 	agora func() time.Time
+	// AoAssistirJunto recebe os nomes de quem viu junto, o arquivo e
+	// quantos segundos. Chamado fora da trava, numa goroutine.
+	AoAssistirJunto func(nomes []string, fileID int64, segundos float64)
 }
 
 func Novas() *Salas {
@@ -110,6 +144,8 @@ func (s *Salas) Criar(fileID int64, posicao float64, tocando bool, por string) (
 		vistos:     map[*espectador]struct{}{},
 		carregando: map[string]bool{},
 		vazia:      s.agora(),
+		pausouEm:   s.agora(),
+		contadoAte: s.ms(),
 	}
 	s.salas[codigo] = sl
 	return s.foto(sl), nil
@@ -136,8 +172,12 @@ func (s *Salas) Entrar(codigo, nome string) (<-chan Mensagem, func(), error) {
 	if sl == nil {
 		return nil, nil, ErrSalaNaoExiste
 	}
-	e := &espectador{nome: nome, ch: make(chan Mensagem, 16)}
+	s.contabilizar(sl)
+	e := &espectador{nome: nome, ch: make(chan Mensagem, 64)}
 	sl.vistos[e] = struct{}{}
+	if len(sl.chat) > 0 {
+		entregar(e, Mensagem{Tipo: "historico", Chat: append([]Linha(nil), sl.chat...)})
+	}
 	s.espalhar(sl)
 	sair := func() {
 		s.mu.Lock()
@@ -145,6 +185,7 @@ func (s *Salas) Entrar(codigo, nome string) (<-chan Mensagem, func(), error) {
 		if _, ok := sl.vistos[e]; !ok {
 			return
 		}
+		s.contabilizar(sl)
 		delete(sl.vistos, e)
 		if !s.presente(sl, nome) {
 			delete(sl.carregando, nome)
@@ -159,13 +200,19 @@ func (s *Salas) Entrar(codigo, nome string) (<-chan Mensagem, func(), error) {
 
 // Comando é uma ação de um espectador.
 type Comando struct {
-	Tipo    string  `json:"tipo"` // play | pause | seek | arquivo | carregando | pronto | reacao
+	Tipo    string  `json:"tipo"` // play | pause | seek | arquivo | carregando | pronto | reacao | chat | modo | conexao | encerrar
 	Posicao float64 `json:"posicao"`
+	Texto   string  `json:"texto,omitempty"`
+	SoDono  bool    `json:"so_dono,omitempty"`
+	Dif     float64 `json:"dif,omitempty"`
+	Travado bool    `json:"travado,omitempty"`
 	FileID  int64   `json:"file_id,omitempty"`
 	Emoji   string  `json:"emoji,omitempty"`
 	Cliente string  `json:"cliente,omitempty"`
 	Seq     int64   `json:"seq,omitempty"`
 }
+
+var ErrSoDono = errors.New("nesta sala só o anfitrião controla o vídeo")
 
 var reacoes = map[string]bool{"😂": true, "😱": true, "😍": true, "👏": true, "😢": true, "🔥": true, "🍿": true, "👀": true}
 
@@ -180,16 +227,60 @@ func (s *Salas) Aplicar(codigo, nome string, c Comando) error {
 		c.Posicao = 0
 	}
 	e := &sl.estado
+	controle := c.Tipo == "play" || c.Tipo == "pause" || c.Tipo == "seek" || c.Tipo == "arquivo"
+	if controle && e.SoDono && nome != e.Dono {
+		return ErrSoDono
+	}
+	if c.Tipo != "conexao" && c.Tipo != "chat" && c.Tipo != "reacao" {
+		s.contabilizar(sl)
+	}
 	if c.Tipo == "play" || c.Tipo == "pause" || c.Tipo == "seek" {
 		e.Cliente, e.Seq = c.Cliente, c.Seq
 	}
 	switch c.Tipo {
 	case "play":
-		e.Tocando, e.Posicao, e.Em, e.Por = true, c.Posicao, s.ms(), nome
+		inicio := s.ms()
+		if !e.Tocando && s.agora().Sub(sl.pausouEm) > pausaLonga {
+			inicio += contagem
+		}
+		e.Tocando, e.Posicao, e.Em, e.Por = true, c.Posicao, inicio, nome
 		s.desarmar(sl)
 	case "pause":
 		e.Tocando, e.Posicao, e.Em, e.Por = false, c.Posicao, s.ms(), nome
+		sl.pausouEm = s.agora()
 		s.desarmar(sl)
+	case "modo":
+		if nome != e.Dono {
+			return errors.New("só quem abriu a sala muda o modo")
+		}
+		e.SoDono = c.SoDono
+	case "chat":
+		texto := strings.TrimSpace(c.Texto)
+		if texto == "" {
+			return errors.New("mensagem vazia")
+		}
+		if r := []rune(texto); len(r) > maxTexto {
+			texto = string(r[:maxTexto])
+		}
+		l := Linha{De: nome, Texto: texto, Em: s.ms()}
+		sl.chat = append(sl.chat, l)
+		if len(sl.chat) > maxChat {
+			sl.chat = sl.chat[len(sl.chat)-maxChat:]
+		}
+		for v := range sl.vistos {
+			entregar(v, Mensagem{Tipo: "chat", Linha: &l})
+		}
+		return nil
+	case "conexao":
+		if c.Dif != c.Dif {
+			c.Dif = 0
+		}
+		for v := range sl.vistos {
+			if v.nome != nome {
+				entregar(v, Mensagem{Tipo: "conexao", De: nome, Conexao: &Conexao{Dif: c.Dif, Travado: c.Travado}})
+			}
+		}
+		return nil
 	case "seek":
 		e.Posicao, e.Em, e.Por = c.Posicao, s.ms(), nome
 		// Tocando, um pulo faz todo mundo carregar ao mesmo tempo: a sala
@@ -208,6 +299,7 @@ func (s *Salas) Aplicar(codigo, nome string, c Comando) error {
 			return errors.New("arquivo inválido")
 		}
 		e.FileID, e.Posicao, e.Em, e.Por, e.Tocando = c.FileID, 0, s.ms(), nome, false
+		sl.pausouEm = s.agora()
 		s.desarmar(sl)
 	case "carregando":
 		// Alguém travou: a sala para no ponto atual e espera.
@@ -228,6 +320,7 @@ func (s *Salas) Aplicar(codigo, nome string, c Comando) error {
 		if nome != e.Dono {
 			return errors.New("só quem abriu a sala pode encerrá-la")
 		}
+		s.contabilizar(sl)
 		for v := range sl.vistos {
 			entregar(v, Mensagem{Tipo: "fim", De: nome})
 		}
@@ -246,6 +339,23 @@ func (s *Salas) Aplicar(codigo, nome string, c Comando) error {
 	}
 	s.espalhar(sl)
 	return nil
+}
+
+// contabilizar soma o tempo tocado desde a última conta para quem está
+// junto (duas pessoas ou mais). Chamado antes de qualquer mudança.
+func (s *Salas) contabilizar(sl *sala) {
+	agora := s.ms()
+	de := max(sl.contadoAte, sl.estado.Em)
+	sl.contadoAte = agora
+	if !sl.estado.Tocando || agora <= de || s.AoAssistirJunto == nil {
+		return
+	}
+	nomes := s.foto(sl).Presenca
+	if len(nomes) < 2 {
+		return
+	}
+	cb, fileID, seg := s.AoAssistirJunto, sl.estado.FileID, float64(agora-de)/1000
+	go cb(nomes, fileID, seg)
 }
 
 func (s *Salas) retomar(sl *sala) {
@@ -285,7 +395,7 @@ func (s *Salas) posicaoAgora(sl *sala) float64 {
 	if !e.Tocando {
 		return e.Posicao
 	}
-	return e.Posicao + float64(s.ms()-e.Em)/1000
+	return e.Posicao + float64(max(0, s.ms()-e.Em))/1000
 }
 
 func (s *Salas) presente(sl *sala, nome string) bool {

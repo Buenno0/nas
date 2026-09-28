@@ -35,6 +35,7 @@ type Retrospectiva struct {
 	Maratona       *Maratona               `json:"maratona,omitempty"`
 	Primeiro       *TituloNaRetrospectiva  `json:"primeiro,omitempty"`
 	Ultimo         *TituloNaRetrospectiva  `json:"ultimo,omitempty"`
+	Juntos         []Companhia             `json:"juntos"`
 }
 
 type GeneroNaRetrospectiva struct {

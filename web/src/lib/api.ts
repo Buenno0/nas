@@ -502,6 +502,7 @@ export interface Retrospectiva {
   maratona?: { dia: string; episodios: number; titulo: TituloNaRetrospectiva }
   primeiro?: TituloNaRetrospectiva
   ultimo?: TituloNaRetrospectiva
+  juntos: { nome: string; segundos: number }[]
 }
 
 export interface EstadoDaSala {
@@ -516,6 +517,13 @@ export interface EstadoDaSala {
   seq?: number
   presenca: string[]
   aguardando?: string[]
+  so_dono?: boolean
+}
+
+export interface LinhaDoChat {
+  de: string
+  texto: string
+  em: number
 }
 
 export type ComandoDaSala =
@@ -524,11 +532,17 @@ export type ComandoDaSala =
   | { tipo: 'carregando' | 'pronto' }
   | { tipo: 'reacao'; emoji: string }
   | { tipo: 'encerrar' }
+  | { tipo: 'chat'; texto: string }
+  | { tipo: 'modo'; so_dono: boolean }
+  | { tipo: 'conexao'; dif: number; travado: boolean }
 
 export type MensagemDaSala =
   | { tipo: 'estado'; estado: EstadoDaSala; agora: number }
   | { tipo: 'reacao'; de: string; emoji: string; agora: number }
   | { tipo: 'fim'; de: string; agora: number }
+  | { tipo: 'chat'; linha: LinhaDoChat; agora: number }
+  | { tipo: 'historico'; chat: LinhaDoChat[]; agora: number }
+  | { tipo: 'conexao'; de: string; conexao: { dif: number; travado: boolean }; agora: number }
 
 export const api = {
   me: () => request<User>('/api/auth/me'),

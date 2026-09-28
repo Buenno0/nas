@@ -238,6 +238,31 @@ export function Retrospectiva() {
           )}
         </Cartao>
 
+        {data.juntos?.length > 0 && (
+          <Cartao rotulo="Assistindo junto">
+            <p className="text-5xl font-bold tracking-tight">
+              <Contador valor={horas(data.juntos.reduce((t, c) => t + c.segundos, 0))} sufixo=" h" />
+            </p>
+            <p className="text-muted">
+              em salas com outras pessoas. Quem mais esteve com você foi{' '}
+              <span className="font-semibold text-ink">{data.juntos[0].nome}</span>.
+            </p>
+            <ul className="space-y-3">
+              {data.juntos.map((c) => (
+                <li key={c.nome} className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent text-lg font-bold text-accent-ink uppercase">
+                    {c.nome.slice(0, 1)}
+                  </span>
+                  <span className="flex-1 font-medium">{c.nome}</span>
+                  <span className="font-mono text-sm text-muted">
+                    {c.segundos >= 3600 ? `${horas(c.segundos)} h` : `${Math.round(c.segundos / 60)} min`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Cartao>
+        )}
+
         {data.primeiro && data.ultimo && (
           <Cartao rotulo="Do começo ao fim">
             <div className="grid gap-6 sm:grid-cols-2">

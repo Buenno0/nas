@@ -113,6 +113,11 @@ export function Watch() {
   const [preparo, setPreparo] = useState<PreparoProgresso | undefined>(undefined)
 
   const sala = useSala(codigoDaSala, videoRef)
+  // Modo cinema, do lado do convidado: só assiste. Play, pausa, pulos e troca
+  // de episódio nem aparecem; volume, legenda e tela cheia continuam dele.
+  const soAssiste = !!codigoDaSala && !!sala.estado?.so_dono && !sala.souDono
+  const soAssisteRef = useRef(soAssiste)
+  soAssisteRef.current = soAssiste
   const [criandoSala, setCriandoSala] = useState(false)
   const cast = useCast()
   const [erroCast, setErroCast] = useState<string>()
@@ -332,7 +337,7 @@ export function Watch() {
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || soAssisteRef.current) return
     if (video.paused) void video.play()
     else video.pause()
     revealChrome()
@@ -341,7 +346,7 @@ export function Watch() {
   const seekBy = useCallback(
     (delta: number) => {
       const video = videoRef.current
-      if (!video) return
+      if (!video || soAssisteRef.current) return
       video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration || 0)
       revealChrome()
     },
@@ -451,7 +456,7 @@ export function Watch() {
 
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current
-    if (!video || !duration) return
+    if (!video || !duration || soAssiste) return
     video.currentTime = (Number(e.target.value) / 100) * duration
     setCurrent(video.currentTime)
   }
@@ -528,8 +533,9 @@ export function Watch() {
         }}
         onEnded={(e) => {
           save(e.currentTarget.duration, e.currentTarget.duration)
-          if (next?.next && codigoDaSala) sala.enviar({ tipo: 'arquivo', file_id: next.next })
-          else if (next?.next) navigate(`/watch/${next.next}`)
+          if (next?.next && codigoDaSala) {
+            if (!soAssiste) sala.enviar({ tipo: 'arquivo', file_id: next.next })
+          } else if (next?.next) navigate(`/watch/${next.next}`)
         }}
         onError={() => setFailed(true)}
         className={['h-full w-full', isAudio ? 'object-contain opacity-90' : 'object-contain'].join(' ')}
@@ -644,8 +650,9 @@ export function Watch() {
             step={0.1}
             value={percent}
             onChange={onSeek}
+            disabled={soAssiste}
             aria-label="Posição"
-            className="relative h-4 w-full cursor-pointer appearance-none bg-transparent
+            className="relative h-4 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-default disabled:[&::-webkit-slider-thumb]:opacity-0
                        [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5
                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
                        [&::-webkit-slider-thumb]:bg-accent"
@@ -653,6 +660,12 @@ export function Watch() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-white">
+          {soAssiste ? (
+            <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/80">
+              🎬 {sala.estado?.dono} controla o vídeo
+            </span>
+          ) : (
+          <>
           <button
             type="button"
             onClick={togglePlay}
@@ -676,6 +689,8 @@ export function Watch() {
           >
             +{SKIP_SECONDS}s
           </button>
+          </>
+          )}
 
           <span className="font-mono text-xs text-white/80 tabular-nums">
             {clockTime(current)} / {clockTime(duration)}
@@ -777,7 +792,7 @@ export function Watch() {
             </select>
             )}
 
-            {next?.next && codigoDaSala && (
+            {next?.next && codigoDaSala && !soAssiste && (
               <button
                 type="button"
                 onClick={() => sala.enviar({ tipo: 'arquivo', file_id: next.next! })}

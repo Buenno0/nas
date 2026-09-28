@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import type { useSala } from '../lib/useSala'
+import { esquecerSala, type Conexao, type useSala } from '../lib/useSala'
 
 const EMOJIS = ['😂', '😱', '😍', '👏', '😢', '🔥', '🍿', '👀']
 
@@ -22,8 +22,19 @@ export function PainelDaSala({
   const [saindo, setSaindo] = useState(false)
   // Recém-criada, a sala já abre o convite: é o próximo passo de quem a criou.
   const [convite, setConvite] = useState(() => new URLSearchParams(window.location.search).has('novo'))
+  const [chatAberto, setChatAberto] = useState(false)
+  const [lidas, setLidas] = useState(0)
   const e = sala.estado
   const link = `${window.location.origin}${window.location.pathname}?sala=${codigo}`
+  const naoLidas = chatAberto ? 0 : Math.max(0, sala.chat.length - lidas)
+  useEffect(() => {
+    if (chatAberto) setLidas(sala.chat.length)
+  }, [chatAberto, sala.chat.length])
+  // Sair de propósito não deixa o "voltar para a sala" na Home.
+  const sairDaSala = () => {
+    esquecerSala()
+    sair()
+  }
 
   return (
     <>
@@ -55,13 +66,43 @@ export function PainelDaSala({
             {(e?.presenca ?? []).map((nome) => (
               <span
                 key={nome}
-                title={nome}
-                className="grid h-6 w-6 place-items-center rounded-full bg-accent text-[11px] font-bold text-accent-ink uppercase ring-2 ring-black/60"
+                title={`${nome} · ${descreverConexao(nome === sala.eu ? undefined : sala.conexoes[nome])}`}
+                className="relative grid h-6 w-6 place-items-center rounded-full bg-accent text-[11px] font-bold text-accent-ink uppercase ring-2 ring-black/60"
               >
                 {nome.slice(0, 1)}
+                {nome !== sala.eu && (
+                  <span
+                    aria-hidden="true"
+                    className={`absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-black/70 ${corDaConexao(sala.conexoes[nome])}`}
+                  />
+                )}
               </span>
             ))}
           </span>
+          <button
+            type="button"
+            onClick={() => setChatAberto((a) => !a)}
+            aria-pressed={chatAberto}
+            className="relative rounded-full bg-white/15 px-3 py-1 font-medium transition hover:bg-white/25"
+          >
+            Chat
+            {naoLidas > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-ink">
+                {naoLidas}
+              </span>
+            )}
+          </button>
+          {sala.souDono && (
+            <button
+              type="button"
+              onClick={() => sala.enviar({ tipo: 'modo', so_dono: !e?.so_dono })}
+              aria-pressed={!!e?.so_dono}
+              title="Modo cinema: só você controla play, pausa e pulos"
+              className={`rounded-full px-3 py-1 font-medium transition ${e?.so_dono ? 'bg-accent text-accent-ink' : 'bg-white/15 hover:bg-white/25'}`}
+            >
+              🎬 Cinema
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setConvite(true)}
@@ -90,6 +131,9 @@ export function PainelDaSala({
             </button>
           ))}
         </div>
+        {e?.so_dono && !sala.souDono && (
+          <p className="rounded-full bg-black/55 px-3 py-1 text-xs text-white/80 backdrop-blur-sm">🎬 {e.dono} controla o vídeo</p>
+        )}
         {e?.por && (
           <p className="rounded-full bg-black/55 px-3 py-1 text-xs text-white/80 backdrop-blur-sm">
             {e.tocando ? '▶' : '❚❚'} por {e.por}
@@ -105,6 +149,14 @@ export function PainelDaSala({
           </p>
         ))}
       </div>
+
+      <Contagem sala={sala} />
+
+      {chatAberto ? (
+        <ChatDaSala sala={sala} fechar={() => setChatAberto(false)} />
+      ) : (
+        <UltimasDoChat sala={sala} desde={lidas} abrir={() => setChatAberto(true)} />
+      )}
 
       {e?.aguardando && e.aguardando.length > 0 && (
         <div className="pointer-events-none absolute inset-x-0 top-20 flex justify-center">
@@ -132,7 +184,7 @@ export function PainelDaSala({
           <div className="mt-5 flex flex-col gap-2">
             <button
               type="button"
-              onClick={sair}
+              onClick={sairDaSala}
               className="w-full rounded-xl bg-white/10 py-3 font-semibold transition hover:bg-white/20"
             >
               Sair da sala
@@ -142,7 +194,7 @@ export function PainelDaSala({
                 type="button"
                 onClick={() => {
                   sala.enviar({ tipo: 'encerrar' })
-                  sair()
+                  sairDaSala()
                 }}
                 className="w-full rounded-xl bg-red-600 py-3 font-semibold transition hover:bg-red-500"
               >
@@ -154,11 +206,11 @@ export function PainelDaSala({
       )}
 
       {sala.fim && (
-        <Dialogo titulo="A sala foi encerrada" fechar={sair}>
+        <Dialogo titulo="A sala foi encerrada" fechar={sairDaSala}>
           <p className="text-sm text-white/60">{sala.fim} encerrou a sessão. Você pode continuar assistindo sozinho.</p>
           <button
             type="button"
-            onClick={sair}
+            onClick={sairDaSala}
             className="mt-5 w-full rounded-xl bg-accent py-3 font-semibold text-accent-ink transition hover:opacity-90"
           >
             Continuar sozinho
@@ -351,5 +403,117 @@ function Dialogo({ titulo, fechar, children }: { titulo: string; fechar: () => v
         <div className="mt-2">{children}</div>
       </div>
     </div>
+  )
+}
+
+function corDaConexao(c?: Conexao) {
+  if (!c || Date.now() - c.em > 15_000) return 'bg-neutral-500'
+  if (c.travado || Math.abs(c.dif) > 2) return 'bg-red-500'
+  if (Math.abs(c.dif) > 0.5) return 'bg-amber-400'
+  return 'bg-emerald-400'
+}
+
+function descreverConexao(c?: Conexao) {
+  if (!c) return 'você'
+  if (Date.now() - c.em > 15_000) return 'sem notícias'
+  if (c.travado) return 'carregando'
+  const s = Math.abs(c.dif).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+  return Math.abs(c.dif) < 0.5 ? 'em sincronia' : `${s} s ${c.dif > 0 ? 'atrás' : 'à frente'}`
+}
+
+/** "3, 2, 1" antes do play que vem depois de uma pausa longa. */
+function Contagem({ sala }: { sala: ReturnType<typeof useSala> }) {
+  const e = sala.estado
+  const [falta, setFalta] = useState(0)
+  useEffect(() => {
+    if (!e?.tocando) {
+      setFalta(0)
+      return
+    }
+    const passo = () => setFalta(Math.max(0, e.em - sala.agoraServidor()))
+    passo()
+    const t = window.setInterval(passo, 100)
+    return () => window.clearInterval(t)
+  }, [e?.tocando, e?.em, sala])
+  if (falta <= 0) return null
+  const n = Math.ceil(falta / 1000)
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/40" role="status" aria-live="assertive">
+      <span key={n} className="sala-contagem text-9xl font-bold text-white tabular-nums drop-shadow-2xl">
+        {n}
+      </span>
+    </div>
+  )
+}
+
+function ChatDaSala({ sala, fechar }: { sala: ReturnType<typeof useSala>; fechar: () => void }) {
+  const [texto, setTexto] = useState('')
+  const fim = useRef<HTMLDivElement>(null)
+  useEffect(() => fim.current?.scrollIntoView({ block: 'end' }), [sala.chat.length])
+  const mandar = (ev: React.FormEvent) => {
+    ev.preventDefault()
+    const t = texto.trim()
+    if (!t) return
+    sala.falar(t)
+    setTexto('')
+  }
+  return (
+    <aside className="absolute top-28 right-4 bottom-28 z-20 flex w-[min(20rem,calc(100%-2rem))] flex-col rounded-2xl border border-white/10 bg-black/75 text-white shadow-2xl backdrop-blur-md">
+      <header className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Chat da sala</h2>
+        <button type="button" onClick={fechar} aria-label="Fechar chat" className="grid h-7 w-7 place-items-center rounded-full text-white/60 hover:bg-white/10 hover:text-white">
+          ✕
+        </button>
+      </header>
+      <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm">
+        {sala.chat.length === 0 && <p className="text-center text-white/40">Ninguém falou nada ainda.</p>}
+        {sala.chat.map((l, i) => (
+          <p key={`${l.em}-${i}`} className={l.de === sala.eu ? 'text-right' : ''}>
+            <span className="block text-[11px] text-white/45">{l.de === sala.eu ? 'você' : l.de}</span>
+            <span className={`inline-block max-w-full rounded-2xl px-3 py-1.5 break-words ${l.de === sala.eu ? 'bg-accent text-accent-ink' : 'bg-white/10'}`}>
+              {l.texto}
+            </span>
+          </p>
+        ))}
+        <div ref={fim} />
+      </div>
+      <form onSubmit={mandar} className="flex gap-2 border-t border-white/10 p-2">
+        <input
+          value={texto}
+          onChange={(ev) => setTexto(ev.target.value)}
+          maxLength={300}
+          placeholder="Escreva algo…"
+          aria-label="Mensagem"
+          autoFocus
+          className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2 text-sm outline-none placeholder:text-white/40 focus:bg-white/15"
+        />
+        <button type="submit" disabled={!texto.trim()} className="rounded-full bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-40">
+          Enviar
+        </button>
+      </form>
+    </aside>
+  )
+}
+
+/** Com o chat fechado, as mensagens novas aparecem um instante no canto. */
+function UltimasDoChat({ sala, desde, abrir }: { sala: ReturnType<typeof useSala>; desde: number; abrir: () => void }) {
+  const [agora, setAgora] = useState(() => Date.now())
+  useEffect(() => {
+    const t = window.setInterval(() => setAgora(Date.now()), 1000)
+    return () => window.clearInterval(t)
+  }, [])
+  const recentes = sala.chat
+    .slice(desde)
+    .filter((l) => l.de !== sala.eu && agora - (l.em - (sala.agoraServidor() - Date.now())) < 6000)
+    .slice(-3)
+  if (recentes.length === 0) return null
+  return (
+    <button type="button" onClick={abrir} className="absolute bottom-32 left-4 z-10 flex max-w-xs flex-col items-start gap-1.5 text-left">
+      {recentes.map((l, i) => (
+        <span key={`${l.em}-${i}`} className="sala-toast rounded-2xl bg-black/75 px-3 py-1.5 text-sm text-white shadow-lg backdrop-blur-sm">
+          <b className="font-semibold">{l.de}:</b> {l.texto}
+        </span>
+      ))}
+    </button>
   )
 }
