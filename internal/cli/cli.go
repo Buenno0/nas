@@ -34,6 +34,7 @@ Uso:
   nas status
   nas stop
   nas config [set <chave> <valor>]
+  nas estante sondar [--ps5 IP] [--tv URL]  PS5 e TV na rede (só leitura)
   nas version
 `
 
@@ -72,6 +73,8 @@ func Run(args []string) int {
 		err = cmdWorker(ctx, rest)
 	case "bastao":
 		err = cmdBastao(ctx, rest)
+	case "estante":
+		err = cmdEstante(ctx, rest)
 	case "saude":
 		err = cmdSaude()
 	case "status":

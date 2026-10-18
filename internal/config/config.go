@@ -40,6 +40,16 @@ type Config struct {
 	// independente do acesso LAN/Tunnel.
 	Modo  string `json:"modo"`
 	Nuvem Nuvem  `json:"nuvem"`
+
+	Estante Estante `json:"estante"`
+}
+
+// Estante são os aparelhos da sala (PS5 e TV). Os dois campos são opcionais:
+// vazios, o servidor procura na rede (DDP e SSDP) a cada sondagem. Fixar
+// evita a busca por broadcast e escolhe entre aparelhos quando há mais de um.
+type Estante struct {
+	PS5 string `json:"ps5,omitempty"` // IP do PS5
+	TV  string `json:"tv,omitempty"`  // URL da descrição UPnP da TV (o LOCATION do SSDP)
 }
 
 // Nuvem descreve o bucket do modo híbrido. Nenhum segredo mora aqui: as

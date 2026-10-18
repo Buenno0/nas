@@ -40,6 +40,9 @@ func cmdConfig(args []string) error {
 			}
 			fmt.Println()
 		}
+		if cfg.Estante.PS5 != "" || cfg.Estante.TV != "" {
+			fmt.Printf("estante:    PS5 %s · TV %s\n", orRede(cfg.Estante.PS5), orRede(cfg.Estante.TV))
+		}
 		return nil
 	}
 
@@ -95,6 +98,10 @@ func cmdConfig(args []string) error {
 			return fmt.Errorf("nuvem.path_style deve ser true ou false")
 		}
 		cfg.Nuvem.PathStyle = b
+	case "estante.ps5":
+		cfg.Estante.PS5 = strings.TrimSpace(value)
+	case "estante.tv":
+		cfg.Estante.TV = strings.TrimSpace(value)
 	case "port":
 		port, err := strconv.Atoi(value)
 		if err != nil || port < 1 || port > 65535 {
@@ -102,7 +109,7 @@ func cmdConfig(args []string) error {
 		}
 		cfg.Port = port
 	default:
-		return fmt.Errorf("chave desconhecida: %s (use port, tmdb_key, tmdb_lang, scan_every, tunnel, nuvem.bucket, nuvem.regiao, nuvem.perfil, nuvem.endpoint, nuvem.prefixo, nuvem.path_style, nuvem.cdn_dominio, nuvem.cdn_chave_id, nuvem.cdn_parametro, nuvem.fila_jobs, nuvem.fila_eventos, nuvem.topico_catalogo, nuvem.orcamento, nuvem.endereco, nuvem.aceleracao; o modo muda com `nas modo`)", key)
+		return fmt.Errorf("chave desconhecida: %s (use port, tmdb_key, tmdb_lang, scan_every, tunnel, nuvem.bucket, nuvem.regiao, nuvem.perfil, nuvem.endpoint, nuvem.prefixo, nuvem.path_style, nuvem.cdn_dominio, nuvem.cdn_chave_id, nuvem.cdn_parametro, nuvem.fila_jobs, nuvem.fila_eventos, nuvem.topico_catalogo, nuvem.orcamento, nuvem.endereco, nuvem.aceleracao, estante.ps5, estante.tv; o modo muda com `nas modo`)", key)
 	}
 
 	if err := config.Save(cfg); err != nil {
@@ -126,6 +133,13 @@ func maskKey(key string) string {
 func orDash(s string) string {
 	if s == "" {
 		return "(quick tunnel)"
+	}
+	return s
+}
+
+func orRede(s string) string {
+	if s == "" {
+		return "(procura na rede)"
 	}
 	return s
 }

@@ -51,6 +51,25 @@ export const MusicIcon = (p: IconProps) => (
   </Icon>
 )
 
+export const GamepadIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M7.5 6h9a5 5 0 0 1 4.9 6l-.9 4.4a2.5 2.5 0 0 1-4.5 1L14.5 15h-5L8 17.4a2.5 2.5 0 0 1-4.5-1L2.6 12A5 5 0 0 1 7.5 6Z" />
+    <path d="M6.5 10.5h3M8 9v3M15.5 10h.01M17.5 12h.01" />
+  </Icon>
+)
+
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Icon>
+)
+
+export const MinusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+  </Icon>
+)
+
 export const PhotoIcon = (p: IconProps) => (
   <Icon {...p}>
     <rect x="3" y="4" width="18" height="16" rx="2" />

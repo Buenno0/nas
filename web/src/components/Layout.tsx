@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Library } from '../lib/api'
 import { useTheme } from '../lib/theme'
 import { useModoAoVivo, useModoNuvem } from '../lib/nuvem'
+import { useEstanteDisponivel } from '../lib/useEstante'
 import { MiniPlayer } from './MiniPlayer'
 import { CartaoDeEnvios } from './CartaoDeEnvios'
 import { EnviarAtalho } from './EnviarAtalho'
@@ -16,6 +17,7 @@ import {
   ChevronRight,
   NuvemIcon,
   FilmIcon,
+  GamepadIcon,
   HomeIcon,
   ListIcon,
   LogoutIcon,
@@ -104,6 +106,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
 }
 
 function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean }) {
+  const estante = useEstanteDisponivel()
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col gap-6 border-r border-line bg-surface px-3 py-4 lg:flex">
       <Brand />
@@ -153,6 +156,11 @@ function Sidebar({ libraries, admin }: { libraries: Library[]; admin: boolean })
         <NavLink to="/retrospectiva" className={navClass}>
           <ClockIcon /> Retrospectiva
         </NavLink>
+        {estante && (
+          <NavLink to="/estante" className={navClass}>
+            <GamepadIcon /> Estante
+          </NavLink>
+        )}
         {/* Telemetria é tela de admin; a rota HTTP já recusa as outras contas. */}
         {admin && (
           <NavLink to="/metricas" className={navClass}>
@@ -333,9 +341,11 @@ function TopBar() {
 
 function MobileNav({ libraries }: { libraries: Library[] }) {
   const first = libraries[0]
+  // No celular a Estante é o controle do sofá: ganha lugar na barra de baixo.
+  const estante = useEstanteDisponivel()
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
-      <div className="grid grid-cols-5">
+      <div className={`grid ${estante ? 'grid-cols-6' : 'grid-cols-5'}`}>
         <MobileLink to="/" label="Início" icon={<HomeIcon />} />
         <MobileLink to="/search" label="Buscar" icon={<SearchIcon />} />
         <MobileLink
@@ -343,6 +353,7 @@ function MobileNav({ libraries }: { libraries: Library[] }) {
           label={first ? 'Acervo' : 'Config'}
           icon={first ? <FilmIcon /> : <SettingsIcon />}
         />
+        {estante && <MobileLink to="/estante" label="Estante" icon={<GamepadIcon />} />}
         <MobileLink to="/ruinas" label="Ruínas" icon={<WarningIcon />} />
         <MobileLink to="/settings" label="Ajustes" icon={<SettingsIcon />} />
       </div>

@@ -19,6 +19,7 @@ import (
 	"nas/internal/config"
 	"nas/internal/db"
 	"nas/internal/energia"
+	"nas/internal/estante"
 	assistir "nas/internal/juntos"
 	"nas/internal/media"
 	"nas/internal/metrics"
@@ -60,6 +61,7 @@ type Server struct {
 	push    *push.Avisador
 	juntos  *assistir.Salas
 	novas   novidades
+	estante *estante.Central
 
 	// preparador cuida da transcodificação sob demanda; fundo é o contexto do
 	// servidor, para um preparo sobreviver à requisição que o pediu mas morrer
@@ -122,6 +124,7 @@ func New(cfg config.Config, database *db.DB, opts Options) *Server {
 		sincro:  motor,
 		push:    push.Novo(database),
 		juntos:  assistir.Novas(),
+		estante: estante.NovaCentral(srv.alvosDaEstante),
 		cfg:     cfg,
 		db:      database,
 		auth:    auth.NewService(database),
@@ -186,6 +189,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/juntos/{codigo}", s.protected(s.handleSala))
 	mux.Handle("POST /api/juntos/{codigo}", s.protected(s.handleComandoDaSala))
 	mux.Handle("GET /api/juntos/{codigo}/eventos", s.protected(s.handleEventosDaSala))
+	// Estante (PS5 e TV da sala): ver e mexer no volume é de qualquer conta.
+	mux.Handle("GET /api/estante", s.protected(s.handleEstante))
+	mux.Handle("GET /api/estante/eventos", s.soNoMac(s.protected(s.handleEstanteEventos)))
+	mux.Handle("POST /api/estante/tv/volume", s.soNoMac(s.protected(s.handleEstanteVolume)))
+	mux.Handle("POST /api/estante/tv/mudo", s.soNoMac(s.protected(s.handleEstanteMudo)))
 	mux.Handle("GET /api/libraries", s.protected(s.handleLibraries))
 	mux.Handle("GET /api/titles", s.protected(s.handleTitles))
 	mux.Handle("GET /api/artistas", s.protected(s.handleArtistas))
@@ -358,6 +366,9 @@ func (s *Server) Serve(ctx context.Context, addr string) error {
 	go s.sincro.Rodar(ctx)
 	go s.diarioDoModo(ctx)
 	go s.amostraLoop(ctx)
+	if !s.opts.NaNuvem {
+		go s.estante.Rodar(ctx)
+	}
 	s.StartBackgroundJobs(ctx)
 
 	errCh := make(chan error, 1)

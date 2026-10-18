@@ -232,6 +232,15 @@ export interface EstadoNuvem {
   papel?: 'mac' | 'nuvem'
 }
 
+/** O PS5 e a TV da sala. null = não respondeu (desligado, ou em descanso sem
+ *  atender a rede). Na instância cloud, disponivel é false. */
+export interface EstadoEstante {
+  disponivel: boolean
+  ps5: { nome: string; endereco: string; estado: 'ligado' | 'descanso' | 'desconhecido'; jogo?: string } | null
+  tv: { nome: string; volume: number; mudo: boolean; max: number } | null
+  em: string
+}
+
 export interface Upload {
   id: number
   library_id: number
@@ -672,6 +681,14 @@ export const api = {
   setModo: (modo: 'local' | 'hibrido') =>
     request<EstadoNuvem>('/api/modo', { method: 'PUT', body: JSON.stringify({ modo }) }),
   modoEventsUrl: () => '/api/modo/events',
+
+  estante: () => request<EstadoEstante>('/api/estante'),
+  estanteEventosUrl: () => '/api/estante/eventos',
+  /** valor = o slider; passo = os botões − e +. */
+  volumeDaTV: (c: { valor: number } | { passo: number }) =>
+    request<EstadoEstante>('/api/estante/tv/volume', { method: 'POST', body: JSON.stringify(c) }),
+  mudoDaTV: (mudo: boolean) =>
+    request<EstadoEstante>('/api/estante/tv/mudo', { method: 'POST', body: JSON.stringify({ mudo }) }),
 
   sincronizacao: () => request<EstadoSincronizacao>('/api/sincronizacao'),
   retrospectiva: (ano?: number) => request<Retrospectiva>(`/api/retrospectiva${ano ? `?ano=${ano}` : ''}`),
